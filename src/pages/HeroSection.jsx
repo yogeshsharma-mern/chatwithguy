@@ -5,6 +5,14 @@ import Ballpit from "./Ballpit";
 const HeroSection = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
+  // ✅ HARD LOCK BODY SCROLL (mobile-safe)
+  React.useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   return (
     <>
       <style>{`
@@ -13,9 +21,9 @@ const HeroSection = () => {
       `}</style>
 
       <section className="relative flex flex-col items-center bg-gradient-to-b from-black to-[#3B006E] text-white px-4 pb-10 overflow-hidden">
-        {/* 🔮 BALLPIT BACKGROUND */}
-        <div className="absolute inset-0 z-0">
-          <div className="w-full h-full pointer-events-none">
+        {/* 🔮 BALLPIT BACKGROUND (TOUCH DISABLED) */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="w-full h-full">
             <Ballpit
               count={100}
               gravity={0.01}
@@ -27,8 +35,8 @@ const HeroSection = () => {
           </div>
         </div>
 
-        {/* CONTENT */}
-        <div className="relative z-10 w-full">
+        {/* CONTENT (TOUCH ENABLED) */}
+        <div className="relative z-10 w-full pointer-events-auto">
           {/* ✅ NAVBAR */}
           <nav className="flex items-center justify-between py-3 md:px-16 lg:px-24 xl:px-32 w-full">
             <span className="text-xl font-semibold">LOGO</span>
@@ -41,28 +49,32 @@ const HeroSection = () => {
               Login
             </Link>
 
-            {/* ✅ MOBILE MENU BUTTON */}
+            {/* ✅ MOBILE MENU BUTTON (CLICK + TOUCH FIX) */}
             <button
+              type="button"
               onClick={() => setMobileOpen(true)}
-              className="md:hidden bg-gray-900/80 hover:bg-gray-800 p-2 rounded-md z-50"
+              onTouchStart={() => setMobileOpen(true)}
+              className="md:hidden bg-gray-900/80 hover:bg-gray-800 p-2 rounded-md z-[101] pointer-events-auto"
             >
               ☰
             </button>
           </nav>
 
-          {/* ✅ MOBILE MENU - FIXED POSITIONING */}
+          {/* ✅ MOBILE MENU */}
           {mobileOpen && (
-            <div className="fixed inset-0 z-[9999]">
+            <div className="fixed inset-0 z-[9999] pointer-events-auto">
               {/* Overlay */}
-              <div 
+              <div
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                 onClick={() => setMobileOpen(false)}
+                onTouchStart={() => setMobileOpen(false)}
               />
-              
+
               {/* Menu Panel */}
               <div className="absolute top-0 right-0 h-full w-3/4 max-w-xs bg-[#12001f] p-6 flex flex-col gap-6 animate-slideIn">
                 <button
                   onClick={() => setMobileOpen(false)}
+                  onTouchStart={() => setMobileOpen(false)}
                   className="self-end text-xl hover:text-gray-300"
                 >
                   ✕
@@ -73,6 +85,7 @@ const HeroSection = () => {
                     key={item}
                     href={`#${item.toLowerCase()}`}
                     onClick={() => setMobileOpen(false)}
+                    onTouchStart={() => setMobileOpen(false)}
                     className="text-lg text-gray-200 hover:text-white py-2"
                   >
                     {item}
@@ -82,6 +95,7 @@ const HeroSection = () => {
                 <Link
                   to="/login"
                   onClick={() => setMobileOpen(false)}
+                  onTouchStart={() => setMobileOpen(false)}
                   className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-center"
                 >
                   Login
