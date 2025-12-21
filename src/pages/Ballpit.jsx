@@ -230,6 +230,9 @@ class x {
     this.isDisposed = true;
   }
 }
+const isTouchDevice =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
 
 const b = new Map(),
   A = new r();
@@ -254,10 +257,13 @@ function S(e) {
         document.body.addEventListener('pointerleave', L);
         document.body.addEventListener('click', C);
 
-        document.body.addEventListener('touchstart', TouchStart, { passive: false });
-        document.body.addEventListener('touchmove', TouchMove, { passive: false });
-        document.body.addEventListener('touchend', TouchEnd, { passive: false });
-        document.body.addEventListener('touchcancel', TouchEnd, { passive: false });
+if (!isTouchDevice) {
+  document.body.addEventListener('touchstart', TouchStart, { passive: false });
+  document.body.addEventListener('touchmove', TouchMove, { passive: false });
+  document.body.addEventListener('touchend', TouchEnd, { passive: false });
+  document.body.addEventListener('touchcancel', TouchEnd, { passive: false });
+}
+
 
         R = true;
       }
@@ -669,7 +675,10 @@ function createBallpit(e, t = {}) {
   const r = new a();
   let c = false;
 
+if (!isTouchDevice) {
   e.style.touchAction = 'none';
+}
+
   e.style.userSelect = 'none';
   e.style.webkitUserSelect = 'none';
 
