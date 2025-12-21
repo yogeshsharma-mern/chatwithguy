@@ -57,8 +57,9 @@ const LoginForm = ({ switchToRegister }) => {
 
       {/* 🔮 BALLPIT — ISOLATED COMPOSITOR LAYER */}
       <div
-        className="absolute inset-0 z-0 pointer-events-none"
+        className="absolute inset-0 z-0"
         style={{
+          pointerEvents: "none",
           transform: "translateZ(0)",
           WebkitTransform: "translateZ(0)",
           willChange: "transform",
@@ -77,9 +78,6 @@ const LoginForm = ({ switchToRegister }) => {
       {/* 🪟 LOGIN CARD */}
       <div
         className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl p-6"
-        style={{
-          WebkitTransform: "translateZ(1px)",
-        }}
       >
         <div className="text-center mb-8">
           <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-[#C084FC] text-transparent bg-clip-text">
@@ -146,7 +144,7 @@ const LoginForm = ({ switchToRegister }) => {
           </button>
 
           <p className="text-center text-sm text-gray-300">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <button
               type="button"
               onClick={switchToRegister}
