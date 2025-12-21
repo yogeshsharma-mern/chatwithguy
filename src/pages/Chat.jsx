@@ -155,18 +155,23 @@ const ChatUI = () => {
     }, [messagesData]);
 
     useEffect(() => {
-        if (myUserId) {
-            socket.connect();
-            socket.emit("setup", myUserId);
-        }
-        socket.on("online-users", (users) => {
+        if (!myUserId) return;
+
+        socket.connect();
+        socket.emit("setup", myUserId);
+
+        const handleOnlineUsers = (users) => {
             setOnlineUsers(users);
-        });
+        };
+
+        socket.on("online-users", handleOnlineUsers);
+
         return () => {
-            socket.off("online-users");
-            socket.disconnect();
+            socket.off("online-users", handleOnlineUsers);
+            // ❌ DO NOT DISCONNECT HERE on mobile
         };
     }, [myUserId]);
+
     useEffect(() => {
         socket.on("new-message", (newMessage) => {
             console.log("newmessages", newMessage)
@@ -185,9 +190,7 @@ const ChatUI = () => {
     }, [activeChat]);
 
     const queryClient = useQueryClient();
-    socket.on("hello", (s) => {
-        console.log(s)
-    })
+
     const sendMessageMutation = useMutation({
         mutationFn: (payload) =>
             apiPost(`${apiPath.sendMessage}/${activeChat._id}`, payload),
@@ -424,7 +427,8 @@ const ChatUI = () => {
                     </div>
 
                     {/* Chat Window */}
-                    {(showChatWindow || !isMobileView) && (
+        {activeChat && (showChatWindow || !isMobileView) && (
+
                         <div className={getChatWindowClasses()}>
                             {/* Desktop Chat Header */}
                             {!isMobileView && (
