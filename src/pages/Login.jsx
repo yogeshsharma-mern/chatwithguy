@@ -16,7 +16,6 @@ const LoginForm = ({ switchToRegister }) => {
     username: "",
     password: "",
   });
-
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,7 +29,6 @@ const LoginForm = ({ switchToRegister }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length) {
       setErrors(validationErrors);
@@ -40,7 +38,6 @@ const LoginForm = ({ switchToRegister }) => {
     try {
       setIsSubmitting(true);
       const res = await apiPost(apiPath.loginUser, formData);
-
       if (res?.token) {
         dispatch(loginSuccess({ user: res, token: res.token }));
         toast.success("Welcome back ✨");
@@ -48,7 +45,7 @@ const LoginForm = ({ switchToRegister }) => {
       } else {
         toast.error(res?.message || "Login failed");
       }
-    } catch (err) {
+    } catch {
       toast.error("Something went wrong");
     } finally {
       setIsSubmitting(false);
@@ -56,15 +53,19 @@ const LoginForm = ({ switchToRegister }) => {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-black to-[#3B006E] overflow-hidden px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-black to-[#3B006E] px-4 overflow-hidden">
 
-      {/* 🔮 BALLPIT BACKGROUND (SAFE – NO CLICK BLOCKING) */}
+      {/* 🔮 BALLPIT — ISOLATED COMPOSITOR LAYER */}
       <div
-        aria-hidden="true"
-        className="absolute inset-0 z-0 pointer-events-none select-none"
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          willChange: "transform",
+        }}
       >
         <Ballpit
-          count={100}
+          count={70}
           gravity={0.05}
           friction={0.995}
           wallBounce={0.95}
@@ -74,11 +75,14 @@ const LoginForm = ({ switchToRegister }) => {
       </div>
 
       {/* 🪟 LOGIN CARD */}
-      <div className="relative z-50 w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl p-8 pointer-events-auto">
-
-        {/* HEADER */}
+      <div
+        className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl p-6"
+        style={{
+          WebkitTransform: "translateZ(1px)",
+        }}
+      >
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-semibold bg-gradient-to-r from-white to-[#C084FC] text-transparent bg-clip-text">
+          <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-[#C084FC] text-transparent bg-clip-text">
             Welcome Back
           </h2>
           <p className="text-gray-300 mt-2 text-sm">
@@ -86,10 +90,8 @@ const LoginForm = ({ switchToRegister }) => {
           </p>
         </div>
 
-        {/* FORM */}
         <form onSubmit={handleSubmit} className="space-y-6">
 
-          {/* USERNAME */}
           <div>
             <label className="text-sm text-gray-300 mb-2 flex items-center gap-2">
               <FaUser /> Username
@@ -100,17 +102,14 @@ const LoginForm = ({ switchToRegister }) => {
               onChange={(e) =>
                 setFormData({ ...formData, username: e.target.value })
               }
-              className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white text-[16px] focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="Enter username"
             />
             {errors.username && (
-              <p className="text-red-400 text-xs mt-1">
-                {errors.username}
-              </p>
+              <p className="text-red-400 text-xs mt-1">{errors.username}</p>
             )}
           </div>
 
-          {/* PASSWORD */}
           <div>
             <label className="text-sm text-gray-300 mb-2 flex items-center gap-2">
               <FaLock /> Password
@@ -122,40 +121,36 @@ const LoginForm = ({ switchToRegister }) => {
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
                 }
-                className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 pr-12"
+                className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white text-[16px] pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="Enter password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
               >
                 {showPassword ? <FaEyeSlash /> : <FaEye />}
               </button>
             </div>
             {errors.password && (
-              <p className="text-red-400 text-xs mt-1">
-                {errors.password}
-              </p>
+              <p className="text-red-400 text-xs mt-1">{errors.password}</p>
             )}
           </div>
 
-          {/* SUBMIT */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 rounded-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 transition-all duration-300 shadow-lg hover:shadow-purple-500/30 disabled:opacity-50"
+            className="w-full py-3 rounded-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-fuchsia-600 disabled:opacity-50"
           >
             {isSubmitting ? "Signing in..." : "Sign In"}
           </button>
 
-          {/* SWITCH */}
           <p className="text-center text-sm text-gray-300">
             Don’t have an account?{" "}
             <button
               type="button"
               onClick={switchToRegister}
-              className="text-purple-400 hover:text-purple-300 font-medium"
+              className="text-purple-400 font-medium"
             >
               Create one
             </button>
