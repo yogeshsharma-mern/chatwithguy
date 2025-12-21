@@ -127,26 +127,15 @@ const ChatUI = () => {
 
     // Detect viewport size and manage layout
     useEffect(() => {
-        const checkViewport = () => {
-            const isMobile = window.innerWidth < 768;
-            setIsMobileView(isMobile);
+        const isMobile = window.innerWidth < 768;
+        setIsMobileView(isMobile);
 
-            if (isMobile) {
-                // On mobile: show chat list by default, hide chat window
-                setShowChatList(true);
-                setShowChatWindow(false);
-            } else {
-                // On desktop: show both chat list and chat window
-                setShowChatList(true);
-                setShowChatWindow(true);
-            }
-        };
-
-        checkViewport();
-        window.addEventListener('resize', checkViewport);
-
-        return () => window.removeEventListener('resize', checkViewport);
+        if (!isMobile) {
+            setShowChatList(true);
+            setShowChatWindow(true);
+        }
     }, []);
+
 
     // Auto-focus input when chat window opens on mobile
     useEffect(() => {
@@ -372,7 +361,7 @@ const ChatUI = () => {
                                 <div
                                     key={chat._id}
                                     onClick={() => handleChatSelect(chat)}
-                                    className={`p-4 border-b border-gray-100 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${activeChat?.id === chat?._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                                    className={`p-4 border-b border-gray-100 cursor-pointer transition-all duration-200 hover:bg-gray-50 ${activeChat?._id === chat?._id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                                         }`}
                                 >
                                     <div className="flex items-center space-x-4">
