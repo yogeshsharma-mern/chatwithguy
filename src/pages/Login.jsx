@@ -1,212 +1,179 @@
-import React, { useState } from 'react';
-// import { useAuth } from './AuthContext';
-import { FaUser, FaLock, FaSignInAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
-import apiPath from '../api/apipath';
-import { apiPut,apiGet,apiPost } from '../api/apiFetch';
-import toast from 'react-hot-toast';
-import { loginSuccess } from "../redux/features/auth/authSlice";
-import { useDispatch } from 'react-redux';
+import React, { useState } from "react";
+import { FaUser, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
+import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
-
-
+import toast from "react-hot-toast";
+import { loginSuccess } from "../redux/features/auth/authSlice";
+import { apiPost } from "../api/apiFetch";
+import apiPath from "../api/apipath";
+import Ballpit from "./Ballpit";
 
 const LoginForm = ({ switchToRegister }) => {
-//   const { login } = useAuth();
-const dispatch = useDispatch();
-const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    username: '',
-    password: ''
+    username: "",
+    password: "",
   });
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState('');
 
   const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required';
-    }
-    
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    }
-    
-    return newErrors;
+    const e = {};
+    if (!formData.username.trim()) e.username = "Username is required";
+    if (!formData.password) e.password = "Password is required";
+    return e;
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const res = await apiPost(apiPath.loginUser, formData);
+
+      if (res?.token) {
+        dispatch(loginSuccess({ user: res, token: res.token }));
+        toast.success("Welcome back ✨");
+        navigate("/chat");
+      } else {
+        toast.error(res?.message || "Login failed");
+      }
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  const validationErrors = validateForm();
-  if (Object.keys(validationErrors).length > 0) {
-    setErrors(validationErrors);
-    return;
-  }
-
-  setIsSubmitting(true);
-  setSubmitMessage("");
-
-  try {
-    const res = await apiPost(apiPath.loginUser, formData);
-    console.log("res", res);
-
-    if (res?.token) {
-      dispatch(loginSuccess({ user: res, token: res.token }));
-      toast.success(res?.message || "Login successful");
-      navigate("/chat");
-    } else {
-      setSubmitMessage({ text: res?.message || "Login failed" });
-    }
-  } catch (error) {
-    console.error(error);
-    setSubmitMessage({ text: "Something went wrong. Please try again." });
-  } finally {
-    setIsSubmitting(false);
-  }
-};
-
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-        <div className="p-8">
+    <>
+      {/* 🔴 CRITICAL: DISABLE CANVAS CLICK BLOCKING */}
+      <style>{`
+        canvas {
+          pointer-events: none !important;
+        }
+      `}</style>
+
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-b from-black to-[#3B006E] px-4">
+
+        {/* 🔮 BALLPIT BACKGROUND (VISIBLE & SAFE) */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <Ballpit
+            count={120}
+            gravity={0.05}
+            friction={0.995}
+            wallBounce={0.95}
+            followCursor
+            colors={[
+              "#5D009F",
+              "#8B5CF6",
+              "#A855F7",
+              "#C084FC",
+            ]}
+          />
+        </div>
+
+        {/* 🪟 GLASS LOGIN CARD */}
+        <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl p-8">
+
+          {/* HEADER */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mb-4">
-              <FaSignInAlt className="text-white text-3xl" />
-            </div>
-            <h2 className="text-3xl font-bold text-gray-800">Welcome Back</h2>
-            <p className="text-gray-600 mt-2">Sign in to your account</p>
+            <h2 className="text-3xl font-semibold bg-gradient-to-r from-white to-[#C084FC] text-transparent bg-clip-text">
+              Welcome Back
+            </h2>
+            <p className="text-gray-300 mt-2 text-sm">
+              Sign in to continue
+            </p>
           </div>
 
+          {/* FORM */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Username */}
+
+            {/* USERNAME */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaUser className="inline mr-2" />
-                Username
+              <label className="text-sm text-gray-300 mb-2 flex items-center gap-2">
+                <FaUser /> Username
               </label>
               <input
                 type="text"
-                name="username"
                 value={formData.username}
-                onChange={handleChange}
-                className={`w-full px-4 py-3 rounded-lg border ${errors.username ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition`}
-                placeholder="Enter your username"
-                autoComplete="username"
+                onChange={(e) =>
+                  setFormData({ ...formData, username: e.target.value })
+                }
+                className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter username"
               />
               {errors.username && (
-                <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+                <p className="text-red-400 text-xs mt-1">
+                  {errors.username}
+                </p>
               )}
             </div>
 
-            {/* Password */}
+            {/* PASSWORD */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FaLock className="inline mr-2" />
-                Password
+              <label className="text-sm text-gray-300 mb-2 flex items-center gap-2">
+                <FaLock /> Password
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  name="password"
                   value={formData.password}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-3 rounded-lg border ${errors.password ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition pr-12`}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  className="w-full rounded-lg bg-black/40 border border-white/10 px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 pr-12"
+                  placeholder="Enter password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                 >
                   {showPassword ? <FaEyeSlash /> : <FaEye />}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-red-500 text-sm mt-1">{errors.password}</p>
+                <p className="text-red-400 text-xs mt-1">
+                  {errors.password}
+                </p>
               )}
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                />
-                <span className="ml-2 text-sm text-gray-700">Remember me</span>
-              </label>
-              <button
-                type="button"
-                className="text-sm text-blue-600 hover:text-blue-800 transition"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            {/* Submit Message */}
-            {submitMessage && (
-              <div className="p-3 rounded-lg bg-red-50 text-red-700">
-                {submitMessage.text}
-              </div>
-            )}
-
-            {/* Submit Button */}
+            {/* SUBMIT */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full py-3 rounded-lg font-semibold text-white bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 transition-all duration-300 shadow-lg hover:shadow-purple-500/30 disabled:opacity-50"
             >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Signing In...
-                </span>
-              ) : (
-                'Sign In'
-              )}
+              {isSubmitting ? "Signing in..." : "Sign In"}
             </button>
 
-            {/* Switch to Register */}
-            <div className="text-center pt-4">
-              <p className="text-gray-600">
-                Don't have an account?{' '}
-                <button
-                  type="button"
-                  onClick={switchToRegister}
-                  className="text-blue-600 font-semibold hover:text-blue-800 transition"
-                >
-                  Create Account
-                </button>
-              </p>
-            </div>
+            {/* SWITCH */}
+            <p className="text-center text-sm text-gray-300">
+              Don’t have an account?{" "}
+              <button
+                type="button"
+                onClick={switchToRegister}
+                className="text-purple-400 hover:text-purple-300 font-medium"
+              >
+                Create one
+              </button>
+            </p>
+
           </form>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

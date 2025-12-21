@@ -1,7 +1,18 @@
-import React from 'react'
-
-export default function HomePage() {
+import React from 'react';
+import Banner from './Banner';
+import HeroSection from './HeroSection';
+import Features from './Features';
+import Testimoinals from './Testimoinals';
+ 
+const HomePage = () => {
   return (
-    <div>HomePage</div>
+<>
+<Banner/>
+<HeroSection/>
+<Features/>
+<Testimoinals/>
+</>
   )
 }
+ 
+export default HomePage
