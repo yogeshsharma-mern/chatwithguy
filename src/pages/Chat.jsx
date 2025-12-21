@@ -237,20 +237,24 @@ const ChatUI = () => {
         }
     };
 
-    const handleChatSelect = (chat) => {
-        setActiveChat(chat);
+const handleChatSelect = (chat) => {
+    setActiveChat(chat);
+    
+    // Update unread count to 0
+    // const updatedChats = chats.map(c => 
+    //   c.id === chat.id ? { ...c, unread: 0 } : c
+    // );
+    // setChats(updatedChats);
 
-        // Update unread count to 0
-        // const updatedChats = chats.map(c => 
-        //   c.id === chat.id ? { ...c, unread: 0 } : c
-        // );
-        // setChats(updatedChats);
-
-        if (isMobileView) {
-            setShowChatList(false);
-            setShowChatWindow(true);
-        }
-    };
+    if (isMobileView) {
+        setShowChatList(false);
+        setShowChatWindow(true);
+    } else {
+        // On desktop, ensure both are visible
+        setShowChatList(true);
+        setShowChatWindow(true);
+    }
+};
 
     const handleBackToChats = () => {
         if (isMobileView) {
@@ -265,24 +269,43 @@ const ChatUI = () => {
     );
 
     // Responsive layout classes
-    const getChatListClasses = () => {
-        if (isMobileView) {
-            return showChatList
-                ? "fixed inset-0 z-50 bg-white flex flex-col"
-                : "hidden";
-        }
-        return "flex flex-col w-full md:w-1/3 lg:w-1/4 xl:w-1/3 border-r border-gray-200";
-    };
-
-    const getChatWindowClasses = () => {
-        if (isMobileView) {
-            return showChatWindow
-                ? "fixed inset-0 z-50 bg-white flex flex-col"
-                : "hidden";
-        }
-        return "flex flex-col flex-1 w-full md:w-2/3 lg:w-3/4 xl:w-2/3";
-    };
-
+    // const getChatListClasses = () => {
+    //     if (isMobileView) {
+    //         return showChatList
+    //             ? "fixed inset-0 z-50 bg-white flex flex-col"
+    //             : "hidden";
+    //     }
+    //     return "flex flex-col w-full md:w-1/3 lg:w-1/4 xl:w-1/3 border-r border-gray-200";
+    // };
+const getChatListClasses = () => {
+    if (isMobileView) {
+        // On mobile, show chat list only when chat window is not showing
+        return !showChatWindow || !activeChat
+            ? "fixed inset-0 z-50 bg-white flex flex-col"
+            : "hidden";
+    }
+    return "flex flex-col w-full md:w-1/3 lg:w-1/4 xl:w-1/3 border-r border-gray-200";
+};
+    // const getChatWindowClasses = () => {
+    //     if (isMobileView) {
+    //         return showChatWindow
+    //             ? "fixed inset-0 z-50 bg-white flex flex-col"
+    //             : "hidden";
+    //     }
+    //     return "flex flex-col flex-1 w-full md:w-2/3 lg:w-3/4 xl:w-2/3";
+    // };
+const getChatWindowClasses = () => {
+    if (isMobileView) {
+        // On mobile, only show when chat window is active
+        return showChatWindow 
+            ? "fixed inset-0 z-50 bg-white flex flex-col"
+            : "hidden";
+    }
+    // On desktop, always show if activeChat exists
+    return activeChat 
+        ? "flex flex-col flex-1 w-full md:w-2/3 lg:w-3/4 xl:w-2/3"
+        : "hidden";
+};
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
             <div className="h-screen">
@@ -427,7 +450,7 @@ const ChatUI = () => {
                     </div>
 
                     {/* Chat Window */}
-        {activeChat && (showChatWindow || !isMobileView) && (
+{activeChat && (
 
                         <div className={getChatWindowClasses()}>
                             {/* Desktop Chat Header */}
