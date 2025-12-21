@@ -67,19 +67,14 @@ const LoginForm = ({ switchToRegister }) => {
 
         {/* 🔮 BALLPIT BACKGROUND (VISIBLE & SAFE) */}
         <div className="absolute inset-0 z-0 pointer-events-none">
-          <Ballpit
-            count={120}
-            gravity={0.05}
-            friction={0.995}
-            wallBounce={0.95}
-            followCursor
-            colors={[
-              "#5D009F",
-              "#8B5CF6",
-              "#A855F7",
-              "#C084FC",
-            ]}
-          />
+         <Ballpit
+              count={100}
+              gravity={0.01}
+              friction={0.9975}
+              wallBounce={0.95}
+              followCursor={true}
+              colors={["#5D009F", "#8B5CF6", "#A855F7", "#C084FC"]}
+            />
         </div>
 
         {/* 🪟 GLASS LOGIN CARD */}

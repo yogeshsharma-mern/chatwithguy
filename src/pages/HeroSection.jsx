@@ -1,10 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import Ballpit from "./Ballpit";
+import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
-
+const navigate  =useNavigate();
   // ✅ HARD LOCK BODY SCROLL (mobile-safe)
   React.useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : "";
@@ -12,6 +13,22 @@ const HeroSection = () => {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
+
+  // ✅ PREVENT ALL LOGIN NAVIGATION
+  const handleLoginClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Login clicked - navigation prevented");
+    navigate("/login");
+    
+    // If you want to close mobile menu too
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+    
+    // Add your login logic here (show modal, form, etc.)
+    // Example: setShowLoginModal(true);
+  };
 
   return (
     <>
@@ -41,15 +58,17 @@ const HeroSection = () => {
           <nav className="flex items-center justify-between py-3 md:px-16 lg:px-24 xl:px-32 w-full">
             <span className="text-xl font-semibold">LOGO</span>
 
-            {/* DESKTOP LOGIN */}
+            {/* DESKTOP LOGIN - NAVIGATION PREVENTED */}
             <Link
               to="/login"
-              className="hidden md:flex items-center bg-purple-600 hover:bg-purple-700 px-10 h-10 rounded-full"
+              onClick={handleLoginClick}
+              onTouchStart={handleLoginClick}
+              className="hidden md:flex items-center bg-purple-600 hover:bg-purple-700 px-10 h-10 rounded-full cursor-pointer"
             >
               Login
             </Link>
 
-            {/* ✅ MOBILE MENU BUTTON (CLICK + TOUCH FIX) */}
+            {/* ✅ MOBILE MENU BUTTON */}
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
@@ -65,13 +84,13 @@ const HeroSection = () => {
             <div className="fixed inset-0 z-[9999] pointer-events-auto">
               {/* Overlay */}
               <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute z-[99] inset-0 bg-black/60 backdrop-blur-sm"
                 onClick={() => setMobileOpen(false)}
                 onTouchStart={() => setMobileOpen(false)}
               />
 
               {/* Menu Panel */}
-              <div className="absolute top-0 right-0 h-full w-3/4 max-w-xs bg-[#12001f] p-6 flex flex-col gap-6 animate-slideIn">
+              <div className="absolute top-0 right-0 h-full w-3/4 z-[999999] max-w-xs bg-[#12001f] p-6 flex flex-col gap-6 animate-slideIn">
                 <button
                   onClick={() => setMobileOpen(false)}
                   onTouchStart={() => setMobileOpen(false)}
@@ -92,11 +111,12 @@ const HeroSection = () => {
                   </a>
                 ))}
 
+                {/* MOBILE LOGIN - NAVIGATION PREVENTED */}
                 <Link
                   to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  onTouchStart={() => setMobileOpen(false)}
-                  className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-center"
+                  onClick={handleLoginClick}
+                  onTouchStart={handleLoginClick}
+                  className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-full text-center cursor-pointer"
                 >
                   Login
                 </Link>
@@ -136,8 +156,3 @@ const HeroSection = () => {
 };
 
 export default HeroSection;
-
-
-
-
-//fjsdifijdsijffdkfkdsfkjd
