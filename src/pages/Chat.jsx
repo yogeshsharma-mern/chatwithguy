@@ -773,14 +773,32 @@ const { data: chatUsers } = useQuery({
   queryFn: () => apiGet("/api/chat/users"),
 });
 
+
+
+
+
 useEffect(() => {
   if (!chatUsers) return;
-  setUserList(chatUsers);
+
+  setUserList(prev => {
+    // first load → API data
+    if (!prev.length) return chatUsers;
+
+    // merge API + socket state
+    return chatUsers.map(apiUser => {
+      const liveUser = prev.find(u => u._id === apiUser._id);
+
+      return liveUser
+        ? {
+            ...apiUser,
+            lastMessage: liveUser.lastMessage,
+            lastMessageAt: liveUser.lastMessageAt,
+            unreadCount: liveUser.unreadCount,
+          }
+        : apiUser;
+    });
+  });
 }, [chatUsers]);
-
-
-
-
 
 
     useEffect(() => {
