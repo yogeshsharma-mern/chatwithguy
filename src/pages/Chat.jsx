@@ -759,6 +759,10 @@ const ChatUI = () => {
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     useEffect(() => {
+  console.log("🔥 onlineUsers from socket:", onlineUsers);
+}, [onlineUsers]);
+
+    useEffect(() => {
   if (usersData) {
     setUserList(
       usersData.map(user => ({
@@ -809,7 +813,9 @@ useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    const isUserOnline = (userId) => onlineUsers.includes(userId);
+const isUserOnline = (userId) => onlineUsers.includes(userId);
+
+
     
     useEffect(() => {
         scrollToBottom();
@@ -1083,11 +1089,19 @@ useEffect(() => {
   >
     <div className="flex items-center gap-4">
       {/* Avatar */}
-      <img
-        src={user.profilePic}
-        alt={user.fullName}
-        className="w-14 h-14 rounded-2xl object-cover"
-      />
+<div className="relative">
+  <img
+    src={user.profilePic}
+    alt={user.fullName}
+    className="w-14 h-14 rounded-2xl object-cover"
+  />
+
+  {isUserOnline(user._id) && (
+    <span className="absolute bottom-0 right-0 w-3 h-3 
+      bg-green-500 border-2 border-black rounded-full" />
+  )}
+</div>
+
 
       {/* Chat Info */}
       <div className="flex-1 min-w-0">
