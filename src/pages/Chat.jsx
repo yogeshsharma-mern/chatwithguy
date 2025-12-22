@@ -239,7 +239,7 @@
 
 // const handleChatSelect = (chat) => {
 //     setActiveChat(chat);
-
+    
 //     // Update unread count to 0
 //     // const updatedChats = chats.map(c => 
 //     //   c.id === chat.id ? { ...c, unread: 0 } : c
@@ -702,7 +702,6 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
-// import { useRef } from 'react';
 import {
     FiSearch, FiPaperclip, FiSend, FiMoreVertical,
     FiVideo, FiPhone, FiCheck, FiImage,
@@ -736,93 +735,57 @@ const ChatUI = () => {
         queryKey: ["userdata"],
         queryFn: () => apiGet(apiPath.getallUsers),
     });
-
+    
     const [chats, setChats] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
     const [onlineUsers, setOnlineUsers] = useState([]);
     const value = useSelector((state) => state.auth);
     const myUserId = value?.user?._id;
-
+    
     const { data: messagesData = [] } = useQuery({
         queryKey: ["messages", activeChat?._id],
         queryFn: () => apiGet(`${apiPath.getMessages}/${activeChat._id}`),
         enabled: !!activeChat?._id,
     });
-
+    
     const [message, setMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileView, setIsMobileView] = useState(false);
     const [showChatList, setShowChatList] = useState(true);
     const [userList, setUserList] = useState([]);
-const didAutoSelectRef = useRef(false);
 
     const [showChatWindow, setShowChatWindow] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
-    const { data: conversations = [] } = useQuery({
-        queryKey: ["conversations"],
-        queryFn: () => apiGet(apiPath.getconversations),
-    });
-// const { data: userList = [] } = useQuery({
-//   queryKey: ["chat-users"],
-//   queryFn: () => apiGet("/api/chat/users"),
-// });
-const { data: chatUsers } = useQuery({
-  queryKey: ["chat-users"],
-  queryFn: () => apiGet("/api/chat/users"),
-});
-
-
-
-
+    useEffect(() => {
+  if (usersData) {
+    setUserList(
+      usersData.map(user => ({
+        ...user,
+        lastMessage: "",
+        lastMessageAt: null,
+        unreadCount: 0,
+      }))
+    );
+  }
+}, [usersData]);
 
 useEffect(() => {
-  if (!chatUsers) return;
-
-  setUserList(prev => {
-    // first load → API data
-    if (!prev.length) return chatUsers;
-
-    // merge API + socket state
-    return chatUsers.map(apiUser => {
-      const liveUser = prev.find(u => u._id === apiUser._id);
-
-      return liveUser
-        ? {
-            ...apiUser,
-            lastMessage: liveUser.lastMessage,
-            lastMessageAt: liveUser.lastMessageAt,
-            unreadCount: liveUser.unreadCount,
-          }
-        : apiUser;
-    });
+  socket.on("connect", () => {
+    console.log("✅ socket connected:", socket.id);
   });
-}, [chatUsers]);
 
+  socket.on("disconnect", () => {
+    console.log("❌ socket disconnected");
+  });
+}, []);
 
     useEffect(() => {
-        socket.on("connect", () => {
-            console.log("✅ socket connected:", socket.id);
-        });
-
-        socket.on("disconnect", () => {
-            console.log("❌ socket disconnected");
-        });
-    }, []);
-useEffect(() => {
-  if (!userList.length) return;
-  if (didAutoSelectRef.current) return;
-
-  const firstWithConversation = userList.find(
-    u => u.lastMessageAt
-  );
-
-  setActiveChat(firstWithConversation || userList[0]);
-  didAutoSelectRef.current = true;
-}, [userList]);
-
-
+        if (!isMobileView && usersData && usersData.length > 0) {
+            setActiveChat(usersData[0]);
+        }
+    }, [usersData, isMobileView]);
 
     useEffect(() => {
         const isMobile = window.innerWidth < 768;
@@ -833,9 +796,6 @@ useEffect(() => {
             setShowChatWindow(true);
         }
     }, []);
-useEffect(() => {
-  console.log("conversations:", conversations);
-}, [conversations]);
 
     useEffect(() => {
         if (showChatWindow && isMobileView && inputRef.current) {
@@ -850,7 +810,7 @@ useEffect(() => {
     };
 
     const isUserOnline = (userId) => onlineUsers.includes(userId);
-
+    
     useEffect(() => {
         scrollToBottom();
     }, [messagesData]);
@@ -874,11 +834,7 @@ useEffect(() => {
 
     useEffect(() => {
         socket.on("new-message", (newMessage) => {
-            if (
-                activeChat?.conversationId &&
-                (newMessage.senderId === activeChat._id ||
-                    newMessage.receiverId === activeChat._id)
-            ) {
+            if (activeChat?._id === newMessage.senderId) {
                 queryClient.setQueryData(
                     ["messages", activeChat._id],
                     (old = []) => [...old, newMessage]
@@ -895,10 +851,8 @@ useEffect(() => {
     setUserList(prev =>
       prev
         .map(user => {
-          const uid = user._id.toString();
-
-          // receiver
-          if (uid === data.receiverId.toString()) {
+          // receiver side
+          if (user._id === data.senderId) {
             return {
               ...user,
               lastMessage: data.lastMessage,
@@ -907,18 +861,18 @@ useEffect(() => {
             };
           }
 
-          // sender
-          if (uid === data.senderId.toString()) {
+          // sender side (my list)
+          if (user._id === data.receiverId) {
             return {
               ...user,
               lastMessage: data.lastMessage,
               lastMessageAt: data.lastMessageAt,
-              unreadCount: 0,
             };
           }
 
           return user;
         })
+        // 🔥 WhatsApp jaisa reorder
         .sort(
           (a, b) =>
             new Date(b.lastMessageAt || 0) -
@@ -928,53 +882,52 @@ useEffect(() => {
   };
 
   socket.on("conversation-update", handleConversationUpdate);
-  return () =>
+
+  return () => {
     socket.off("conversation-update", handleConversationUpdate);
+  };
 }, []);
+useEffect(() => {
+  const handleConversationUpdate = (data) => {
+    setUserList(prev =>
+      prev
+        .map(user => {
+          // receiver side
+          if (user._id === data.senderId) {
+            return {
+              ...user,
+              lastMessage: data.lastMessage,
+              lastMessageAt: data.lastMessageAt,
+              unreadCount: data.unreadCount,
+            };
+          }
 
+          // sender side (my list)
+          if (user._id === data.receiverId) {
+            return {
+              ...user,
+              lastMessage: data.lastMessage,
+              lastMessageAt: data.lastMessageAt,
+            };
+          }
 
+          return user;
+        })
+        // 🔥 WhatsApp jaisa reorder
+        .sort(
+          (a, b) =>
+            new Date(b.lastMessageAt || 0) -
+            new Date(a.lastMessageAt || 0)
+        )
+    );
+  };
 
-    // useEffect(() => {
-    //   const handleConversationUpdate = (data) => {
-    //     setUserList(prev =>
-    //       prev
-    //         .map(user => {
-    //           // receiver side
-    //           if (user._id === data.senderId) {
-    //             return {
-    //               ...user,
-    //               lastMessage: data.lastMessage,
-    //               lastMessageAt: data.lastMessageAt,
-    //               unreadCount: data.unreadCount,
-    //             };
-    //           }
+  socket.on("conversation-update", handleConversationUpdate);
 
-    //           // sender side (my list)
-    //           if (user._id === data.receiverId) {
-    //             return {
-    //               ...user,
-    //               lastMessage: data.lastMessage,
-    //               lastMessageAt: data.lastMessageAt,
-    //             };
-    //           }
-
-    //           return user;
-    //         })
-    //         // 🔥 WhatsApp jaisa reorder
-    //         .sort(
-    //           (a, b) =>
-    //             new Date(b.lastMessageAt || 0) -
-    //             new Date(a.lastMessageAt || 0)
-    //         )
-    //     );
-    //   };
-
-    //   socket.on("conversation-update", handleConversationUpdate);
-
-    //   return () => {
-    //     socket.off("conversation-update", handleConversationUpdate);
-    //   };
-    // }, []);
+  return () => {
+    socket.off("conversation-update", handleConversationUpdate);
+  };
+}, []);
 
 
 
@@ -985,7 +938,7 @@ useEffect(() => {
             apiPost(`${apiPath.sendMessage}/${activeChat._id}`, payload),
         onSuccess: (savedMessage) => {
             queryClient.setQueryData(
-                ["messages", activeChat?.conversationId],
+                ["messages", activeChat._id],
                 (old = []) => [...old, savedMessage]
             );
             setMessage("");
@@ -1021,22 +974,13 @@ useEffect(() => {
         }
     };
 
-const handleChatSelect = (chat) => {
-  setActiveChat(chat);
-
-  setUserList(prev =>
-    prev.map(u =>
-      u._id === chat._id ? { ...u, unreadCount: 0 } : u
-    )
-  );
-
-  if (isMobileView) {
-    setShowChatList(false);
-    setShowChatWindow(true);
-  }
-};
-
-
+    const handleChatSelect = (chat) => {
+        setActiveChat(chat);
+        if (isMobileView) {
+            setShowChatList(false);
+            setShowChatWindow(true);
+        }
+    };
 
     const handleBackToChats = () => {
         if (isMobileView) {
@@ -1130,53 +1074,53 @@ const handleChatSelect = (chat) => {
                         {/* Chat List */}
                         <div className="flex-1 overflow-y-auto p-3">
                             <div className="space-y-2">
+                                
+                          {userList.map(user => (
+  <div
+    key={user._id}
+    onClick={() => handleChatSelect(user)}
+    className="px-4 py-2 rounded-2xl cursor-pointer"
+  >
+    <div className="flex items-center gap-4">
+      {/* Avatar */}
+      <img
+        src={user.profilePic}
+        alt={user.fullName}
+        className="w-14 h-14 rounded-2xl object-cover"
+      />
 
-                                {userList.map(user => (
-                                    <div
-                                        key={user._id}
-                                        onClick={() => handleChatSelect(user)}
-                                        className="px-4 py-2 rounded-2xl cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            {/* Avatar */}
-                                            <img
-                                                src={user.profilePic}
-                                                alt={user.fullName}
-                                                className="w-14 h-14 rounded-2xl object-cover"
-                                            />
+      {/* Chat Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-white text-sm truncate">
+            {user.fullName}
+          </h3>
 
-                                            {/* Chat Info */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <h3 className="font-semibold text-white text-sm truncate">
-                                                        {user.fullName}
-                                                    </h3>
+          <span className="text-xs text-gray-400">
+            {user.lastMessageAt &&
+              new Date(user.lastMessageAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+          </span>
+        </div>
 
-                                                    <span className="text-xs text-gray-400">
-                                                        {user.lastMessageAt &&
-                                                            new Date(user.lastMessageAt).toLocaleTimeString([], {
-                                                                hour: "2-digit",
-                                                                minute: "2-digit",
-                                                            })}
-                                                    </span>
-                                                </div>
+        <p className="text-sm text-gray-300 truncate">
+          {user.lastMessage || "Start a conversation"}
+        </p>
+      </div>
 
-                                                <p className="text-sm text-gray-300 truncate">
-                                                    {user.lastMessage || "Start a conversation"}
-                                                </p>
-                                            </div>
-
-                                            {/* ✅ UNREAD BADGE */}
-                                            {user.unreadCount > 0 && (
-                                                <div className="min-w-[22px] h-[22px] px-2 rounded-full bg-purple-600 flex items-center justify-center">
-                                                    <span className="text-xs font-bold text-white">
-                                                        {user.unreadCount}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+      {/* ✅ UNREAD BADGE */}
+      {user.unreadCount > 0 && (
+        <div className="min-w-[22px] h-[22px] px-2 rounded-full bg-purple-600 flex items-center justify-center">
+          <span className="text-xs font-bold text-white">
+            {user.unreadCount}
+          </span>
+        </div>
+      )}
+    </div>
+  </div>
+))}
 
                             </div>
                         </div>
@@ -1309,8 +1253,8 @@ const handleChatSelect = (chat) => {
                                             <div className={`relative ${msg.sender === 'me' ? 'order-2' : 'order-1'} max-w-[70%]`}>
                                                 <div
                                                     className={`relative rounded-2xl px-4 py-3 shadow-lg ${msg.sender === 'me'
-                                                        ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] text-white rounded-br-lg border border-[#A855F7]/50 shadow-[#5D009F]/20'
-                                                        : 'bg-[#1a0033]/90 text-gray-100 border border-[#5D009F]/30 rounded-bl-lg shadow-black/20 backdrop-blur-sm'
+                                                            ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] text-white rounded-br-lg border border-[#A855F7]/50 shadow-[#5D009F]/20'
+                                                            : 'bg-[#1a0033]/90 text-gray-100 border border-[#5D009F]/30 rounded-bl-lg shadow-black/20 backdrop-blur-sm'
                                                         }`}
                                                 >
                                                     <p className="text-sm leading-relaxed break-words font-medium">{msg.text}</p>
@@ -1397,8 +1341,8 @@ const handleChatSelect = (chat) => {
                                     <button
                                         onClick={message.trim() ? sendMessage : () => { }}
                                         className={`p-4 rounded-2xl transition-all duration-300 ${message.trim()
-                                            ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:from-[#8B5CF6] hover:to-[#A855F7] shadow-lg shadow-[#5D009F]/25 hover:shadow-[#8B5CF6]/30'
-                                            : 'bg-[#5D009F]/20 border border-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30'
+                                                ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:from-[#8B5CF6] hover:to-[#A855F7] shadow-lg shadow-[#5D009F]/25 hover:shadow-[#8B5CF6]/30'
+                                                : 'bg-[#5D009F]/20 border border-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30'
                                             }`}
                                     >
                                         {message.trim() ? (
@@ -1427,7 +1371,7 @@ const handleChatSelect = (chat) => {
                                             </button>
                                         </div>
                                         <div className="text-xs text-gray-400">
-                                            Press <kbd className="px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Enter</kbd> to send •
+                                            Press <kbd className="px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Enter</kbd> to send • 
                                             <kbd className="mx-1 px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Shift + Enter</kbd> for new line
                                         </div>
                                     </div>
