@@ -239,7 +239,7 @@
 
 // const handleChatSelect = (chat) => {
 //     setActiveChat(chat);
-    
+
 //     // Update unread count to 0
 //     // const updatedChats = chats.map(c => 
 //     //   c.id === chat.id ? { ...c, unread: 0 } : c
@@ -702,6 +702,7 @@
 
 
 import React, { useState, useRef, useEffect } from 'react';
+// import { useRef } from 'react';
 import {
     FiSearch, FiPaperclip, FiSend, FiMoreVertical,
     FiVideo, FiPhone, FiCheck, FiImage,
@@ -735,33 +736,101 @@ const ChatUI = () => {
         queryKey: ["userdata"],
         queryFn: () => apiGet(apiPath.getallUsers),
     });
-    
+
     const [chats, setChats] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
     const [onlineUsers, setOnlineUsers] = useState([]);
     const value = useSelector((state) => state.auth);
     const myUserId = value?.user?._id;
-    
+
     const { data: messagesData = [] } = useQuery({
         queryKey: ["messages", activeChat?._id],
         queryFn: () => apiGet(`${apiPath.getMessages}/${activeChat._id}`),
         enabled: !!activeChat?._id,
     });
-    
+
     const [message, setMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileView, setIsMobileView] = useState(false);
     const [showChatList, setShowChatList] = useState(true);
+    const [userList, setUserList] = useState([]);
+const didAutoSelectRef = useRef(false);
+
     const [showChatWindow, setShowChatWindow] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const { data: conversations = [] } = useQuery({
+        queryKey: ["conversations"],
+        queryFn: () => apiGet(apiPath.getconversations),
+    });
+
+useEffect(() => {
+  if (!usersData || !conversations || !myUserId) return;
+
+  const conversationMap = new Map();
+
+  conversations.forEach(conv => {
+    const otherUserId = conv.participants.find(
+      id => id.toString() !== myUserId.toString()
+    )?.toString();
+
+    if (otherUserId) {
+      conversationMap.set(otherUserId, conv);
+    }
+  });
+
+  const merged = usersData.map(user => {
+    const conv = conversationMap.get(user._id.toString());
+
+    return {
+      ...user,
+      conversationId: conv?._id || null,
+      lastMessage: conv?.lastMessage || "",
+      lastMessageAt: conv?.lastMessageAt || null,
+      unreadCount: conv?.unreadCount?.get(myUserId) || 0,
+    };
+  });
+
+  setUserList(
+    merged.sort(
+      (a, b) =>
+        new Date(b.lastMessageAt || 0) -
+        new Date(a.lastMessageAt || 0)
+    )
+  );
+}, [usersData, conversations, myUserId]);
+
+
+
 
     useEffect(() => {
-        if (!isMobileView && usersData && usersData.length > 0) {
-            setActiveChat(usersData[0]);
-        }
-    }, [usersData, isMobileView]);
+        socket.on("connect", () => {
+            console.log("✅ socket connected:", socket.id);
+        });
+
+        socket.on("disconnect", () => {
+            console.log("❌ socket disconnected");
+        });
+    }, []);
+
+useEffect(() => {
+  if (!userList.length) return;
+  if (didAutoSelectRef.current) return;
+
+  // 1️⃣ pehle conversation wala user
+  const withConversation = userList.find(
+    u => u.conversationId
+  );
+
+  // 2️⃣ warna first user
+  const firstUser = withConversation || userList[0];
+
+  setActiveChat(firstUser);
+  didAutoSelectRef.current = true;
+}, [userList]);
+
+
 
     useEffect(() => {
         const isMobile = window.innerWidth < 768;
@@ -786,7 +855,7 @@ const ChatUI = () => {
     };
 
     const isUserOnline = (userId) => onlineUsers.includes(userId);
-    
+
     useEffect(() => {
         scrollToBottom();
     }, [messagesData]);
@@ -810,7 +879,11 @@ const ChatUI = () => {
 
     useEffect(() => {
         socket.on("new-message", (newMessage) => {
-            if (activeChat?._id === newMessage.senderId) {
+            if (
+                activeChat?.conversationId &&
+                (newMessage.senderId === activeChat._id ||
+                    newMessage.receiverId === activeChat._id)
+            ) {
                 queryClient.setQueryData(
                     ["messages", activeChat._id],
                     (old = []) => [...old, newMessage]
@@ -822,6 +895,88 @@ const ChatUI = () => {
             socket.off("new-message");
         };
     }, [activeChat]);
+    useEffect(() => {
+        const handleConversationUpdate = (data) => {
+            setUserList(prev =>
+                prev
+                    .map(user => {
+                        // 🔴 receiver gets unread
+                        if (user._id === data.receiverId) {
+                            return {
+                                ...user,
+                                lastMessage: data.lastMessage,
+                                lastMessageAt: data.lastMessageAt,
+                                unreadCount: data.unreadCount,
+                            };
+                        }
+
+                        // 🟢 sender unread = 0
+                        if (user._id === data.senderId) {
+                            return {
+                                ...user,
+                                lastMessage: data.lastMessage,
+                                lastMessageAt: data.lastMessageAt,
+                                unreadCount: 0,
+                            };
+                        }
+
+                        return user;
+                    })
+                    .sort(
+                        (a, b) =>
+                            new Date(b.lastMessageAt || 0) -
+                            new Date(a.lastMessageAt || 0)
+                    )
+            );
+        };
+
+        socket.on("conversation-update", handleConversationUpdate);
+        return () => socket.off("conversation-update", handleConversationUpdate);
+    }, []);
+
+    // useEffect(() => {
+    //   const handleConversationUpdate = (data) => {
+    //     setUserList(prev =>
+    //       prev
+    //         .map(user => {
+    //           // receiver side
+    //           if (user._id === data.senderId) {
+    //             return {
+    //               ...user,
+    //               lastMessage: data.lastMessage,
+    //               lastMessageAt: data.lastMessageAt,
+    //               unreadCount: data.unreadCount,
+    //             };
+    //           }
+
+    //           // sender side (my list)
+    //           if (user._id === data.receiverId) {
+    //             return {
+    //               ...user,
+    //               lastMessage: data.lastMessage,
+    //               lastMessageAt: data.lastMessageAt,
+    //             };
+    //           }
+
+    //           return user;
+    //         })
+    //         // 🔥 WhatsApp jaisa reorder
+    //         .sort(
+    //           (a, b) =>
+    //             new Date(b.lastMessageAt || 0) -
+    //             new Date(a.lastMessageAt || 0)
+    //         )
+    //     );
+    //   };
+
+    //   socket.on("conversation-update", handleConversationUpdate);
+
+    //   return () => {
+    //     socket.off("conversation-update", handleConversationUpdate);
+    //   };
+    // }, []);
+
+
 
     const queryClient = useQueryClient();
 
@@ -966,61 +1121,54 @@ const ChatUI = () => {
                         {/* Chat List */}
                         <div className="flex-1 overflow-y-auto p-3">
                             <div className="space-y-2">
-                                {filteredChats?.map(chat => (
-                                    <div
-                                        key={chat._id}
-                                        onClick={() => handleChatSelect(chat)}
-                                        className={`group relative px-4 py-2 rounded-2xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${activeChat?._id === chat?._id
-                                                ? 'bg-gradient-to-r from-[#5D009F]/30 to-[#8B5CF6]/20 border border-[#8B5CF6]/40 shadow-lg shadow-[#8B5CF6]/10'
-                                                : 'bg-[#12001f]/40 hover:bg-[#12001f]/60 border border-transparent hover:border-[#5D009F]/30'
-                                            }`}
-                                    >
-                                        {/* Online Indicator Pulse */}
-                                        {isUserOnline(chat._id) && (
-                                            <div className="absolute -left-1 top-1/2 transform -translate-y-1/2">
-                                                <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full animate-pulse"></div>
-                                            </div>
-                                        )}
 
+                                {userList.map(user => (
+                                    <div
+                                        key={user._id}
+                                        onClick={() => handleChatSelect(user)}
+                                        className="px-4 py-2 rounded-2xl cursor-pointer"
+                                    >
                                         <div className="flex items-center gap-4">
                                             {/* Avatar */}
-                                            <div className="relative">
-                                                <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-2 border-transparent group-hover:border-[#8B5CF6]/50 transition-all">
-                                                    <img
-                                                        src={chat.profilePic}
-                                                        alt={chat.fullName}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    {isUserOnline(chat._id) && (
-                                                        <div className="absolute bottom-0 right-0 w-4 h-4 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full border-2 border-black"></div>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            <img
+                                                src={user.profilePic}
+                                                alt={user.fullName}
+                                                className="w-14 h-14 rounded-2xl object-cover"
+                                            />
 
                                             {/* Chat Info */}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <h3 className="font-semibold text-white text-sm truncate flex items-center gap-2">
-                                                        {chat.fullName}
-                                                        {chat._id === "1" && <FaCrown className="text-yellow-400 text-xs" />}
+                                                    <h3 className="font-semibold text-white text-sm truncate">
+                                                        {user.fullName}
                                                     </h3>
-                                                    <span className="text-xs text-gray-400 whitespace-nowrap">
-                                                        <FiClock className="inline mr-1" />
-                                                        {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                                                    <span className="text-xs text-gray-400">
+                                                        {user.lastMessageAt &&
+                                                            new Date(user.lastMessageAt).toLocaleTimeString([], {
+                                                                hour: "2-digit",
+                                                                minute: "2-digit",
+                                                            })}
                                                     </span>
                                                 </div>
+
                                                 <p className="text-sm text-gray-300 truncate">
-                                                    {getLastMessageForUser(chat._id)}
+                                                    {user.lastMessage || "Start a conversation"}
                                                 </p>
                                             </div>
 
-                                            {/* Unread Badge */}
-                                            <div className="flex-shrink-0">
-                                                <div className={`w-2 h-2 rounded-full transition-all ${activeChat?._id === chat?._id ? 'bg-[#C084FC]' : 'bg-gradient-to-r from-[#8B5CF6] to-[#C084FC]'}`}></div>
-                                            </div>
+                                            {/* ✅ UNREAD BADGE */}
+                                            {user.unreadCount > 0 && (
+                                                <div className="min-w-[22px] h-[22px] px-2 rounded-full bg-purple-600 flex items-center justify-center">
+                                                    <span className="text-xs font-bold text-white">
+                                                        {user.unreadCount}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
+
                             </div>
                         </div>
 
@@ -1152,8 +1300,8 @@ const ChatUI = () => {
                                             <div className={`relative ${msg.sender === 'me' ? 'order-2' : 'order-1'} max-w-[70%]`}>
                                                 <div
                                                     className={`relative rounded-2xl px-4 py-3 shadow-lg ${msg.sender === 'me'
-                                                            ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] text-white rounded-br-lg border border-[#A855F7]/50 shadow-[#5D009F]/20'
-                                                            : 'bg-[#1a0033]/90 text-gray-100 border border-[#5D009F]/30 rounded-bl-lg shadow-black/20 backdrop-blur-sm'
+                                                        ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] text-white rounded-br-lg border border-[#A855F7]/50 shadow-[#5D009F]/20'
+                                                        : 'bg-[#1a0033]/90 text-gray-100 border border-[#5D009F]/30 rounded-bl-lg shadow-black/20 backdrop-blur-sm'
                                                         }`}
                                                 >
                                                     <p className="text-sm leading-relaxed break-words font-medium">{msg.text}</p>
@@ -1240,8 +1388,8 @@ const ChatUI = () => {
                                     <button
                                         onClick={message.trim() ? sendMessage : () => { }}
                                         className={`p-4 rounded-2xl transition-all duration-300 ${message.trim()
-                                                ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:from-[#8B5CF6] hover:to-[#A855F7] shadow-lg shadow-[#5D009F]/25 hover:shadow-[#8B5CF6]/30'
-                                                : 'bg-[#5D009F]/20 border border-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30'
+                                            ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:from-[#8B5CF6] hover:to-[#A855F7] shadow-lg shadow-[#5D009F]/25 hover:shadow-[#8B5CF6]/30'
+                                            : 'bg-[#5D009F]/20 border border-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30'
                                             }`}
                                     >
                                         {message.trim() ? (
@@ -1270,7 +1418,7 @@ const ChatUI = () => {
                                             </button>
                                         </div>
                                         <div className="text-xs text-gray-400">
-                                            Press <kbd className="px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Enter</kbd> to send • 
+                                            Press <kbd className="px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Enter</kbd> to send •
                                             <kbd className="mx-1 px-2 py-1 bg-[#12001f]/60 rounded border border-[#5D009F]/30">Shift + Enter</kbd> for new line
                                         </div>
                                     </div>

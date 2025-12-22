@@ -6,6 +6,7 @@ const apiPath = Object.freeze({
     getallUsers: "/api/users",
     sendMessage: "/api/messages/send",
     getMessages: "/api/messages",
+    getconversations:"/api/conversations",
 
 
 
