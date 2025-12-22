@@ -764,42 +764,21 @@ const didAutoSelectRef = useRef(false);
         queryKey: ["conversations"],
         queryFn: () => apiGet(apiPath.getconversations),
     });
+// const { data: userList = [] } = useQuery({
+//   queryKey: ["chat-users"],
+//   queryFn: () => apiGet("/api/chat/users"),
+// });
+const { data: chatUsers } = useQuery({
+  queryKey: ["chat-users"],
+  queryFn: () => apiGet("/api/chat/users"),
+});
 
 useEffect(() => {
-  if (!usersData || !conversations || !myUserId) return;
+  if (!chatUsers) return;
+  setUserList(chatUsers);
+}, [chatUsers]);
 
-  const conversationMap = new Map();
 
-  conversations.forEach(conv => {
-    const otherUserId = conv.participants.find(
-      id => id.toString() !== myUserId.toString()
-    )?.toString();
-
-    if (otherUserId) {
-      conversationMap.set(otherUserId, conv);
-    }
-  });
-
-  const merged = usersData.map(user => {
-    const conv = conversationMap.get(user._id.toString());
-
-    return {
-      ...user,
-      conversationId: conv?._id || null,
-      lastMessage: conv?.lastMessage || "",
-      lastMessageAt: conv?.lastMessageAt || null,
-      unreadCount: conv?.unreadCount?.get(myUserId) || 0,
-    };
-  });
-
-  setUserList(
-    merged.sort(
-      (a, b) =>
-        new Date(b.lastMessageAt || 0) -
-        new Date(a.lastMessageAt || 0)
-    )
-  );
-}, [usersData, conversations, myUserId]);
 
 
 
@@ -813,20 +792,15 @@ useEffect(() => {
             console.log("❌ socket disconnected");
         });
     }, []);
-
 useEffect(() => {
   if (!userList.length) return;
   if (didAutoSelectRef.current) return;
 
-  // 1️⃣ pehle conversation wala user
-  const withConversation = userList.find(
-    u => u.conversationId
+  const firstWithConversation = userList.find(
+    u => u.lastMessageAt
   );
 
-  // 2️⃣ warna first user
-  const firstUser = withConversation || userList[0];
-
-  setActiveChat(firstUser);
+  setActiveChat(firstWithConversation || userList[0]);
   didAutoSelectRef.current = true;
 }, [userList]);
 
@@ -841,6 +815,9 @@ useEffect(() => {
             setShowChatWindow(true);
         }
     }, []);
+useEffect(() => {
+  console.log("conversations:", conversations);
+}, [conversations]);
 
     useEffect(() => {
         if (showChatWindow && isMobileView && inputRef.current) {
@@ -895,44 +872,49 @@ useEffect(() => {
             socket.off("new-message");
         };
     }, [activeChat]);
-    useEffect(() => {
-        const handleConversationUpdate = (data) => {
-            setUserList(prev =>
-                prev
-                    .map(user => {
-                        // 🔴 receiver gets unread
-                        if (user._id === data.receiverId) {
-                            return {
-                                ...user,
-                                lastMessage: data.lastMessage,
-                                lastMessageAt: data.lastMessageAt,
-                                unreadCount: data.unreadCount,
-                            };
-                        }
+useEffect(() => {
+  const handleConversationUpdate = (data) => {
+    setUserList(prev =>
+      prev
+        .map(user => {
+          const uid = user._id.toString();
 
-                        // 🟢 sender unread = 0
-                        if (user._id === data.senderId) {
-                            return {
-                                ...user,
-                                lastMessage: data.lastMessage,
-                                lastMessageAt: data.lastMessageAt,
-                                unreadCount: 0,
-                            };
-                        }
+          // receiver
+          if (uid === data.receiverId.toString()) {
+            return {
+              ...user,
+              lastMessage: data.lastMessage,
+              lastMessageAt: data.lastMessageAt,
+              unreadCount: data.unreadCount,
+            };
+          }
 
-                        return user;
-                    })
-                    .sort(
-                        (a, b) =>
-                            new Date(b.lastMessageAt || 0) -
-                            new Date(a.lastMessageAt || 0)
-                    )
-            );
-        };
+          // sender
+          if (uid === data.senderId.toString()) {
+            return {
+              ...user,
+              lastMessage: data.lastMessage,
+              lastMessageAt: data.lastMessageAt,
+              unreadCount: 0,
+            };
+          }
 
-        socket.on("conversation-update", handleConversationUpdate);
-        return () => socket.off("conversation-update", handleConversationUpdate);
-    }, []);
+          return user;
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.lastMessageAt || 0) -
+            new Date(a.lastMessageAt || 0)
+        )
+    );
+  };
+
+  socket.on("conversation-update", handleConversationUpdate);
+  return () =>
+    socket.off("conversation-update", handleConversationUpdate);
+}, []);
+
+
 
     // useEffect(() => {
     //   const handleConversationUpdate = (data) => {
@@ -985,7 +967,7 @@ useEffect(() => {
             apiPost(`${apiPath.sendMessage}/${activeChat._id}`, payload),
         onSuccess: (savedMessage) => {
             queryClient.setQueryData(
-                ["messages", activeChat._id],
+                ["messages", activeChat?.conversationId],
                 (old = []) => [...old, savedMessage]
             );
             setMessage("");
@@ -1021,13 +1003,22 @@ useEffect(() => {
         }
     };
 
-    const handleChatSelect = (chat) => {
-        setActiveChat(chat);
-        if (isMobileView) {
-            setShowChatList(false);
-            setShowChatWindow(true);
-        }
-    };
+const handleChatSelect = (chat) => {
+  setActiveChat(chat);
+
+  setUserList(prev =>
+    prev.map(u =>
+      u._id === chat._id ? { ...u, unreadCount: 0 } : u
+    )
+  );
+
+  if (isMobileView) {
+    setShowChatList(false);
+    setShowChatWindow(true);
+  }
+};
+
+
 
     const handleBackToChats = () => {
         if (isMobileView) {
