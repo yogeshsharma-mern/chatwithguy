@@ -1,10 +1,11 @@
 
 
 const apiPath = Object.freeze({
-loginUser:"/auth/login",
-getallUsers:"/api/users",
-sendMessage:"/api/messages/send",
-getMessages:"/api/messages",
+    registerUser: "/auth/signup",
+    loginUser: "/auth/login",
+    getallUsers: "/api/users",
+    sendMessage: "/api/messages/send",
+    getMessages: "/api/messages",
 
 
 

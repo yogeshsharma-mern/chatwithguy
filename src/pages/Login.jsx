@@ -147,8 +147,8 @@ const LoginForm = ({ switchToRegister }) => {
             Don't have an account?{" "}
             <button
               type="button"
-              onClick={switchToRegister}
-              className="text-purple-400 font-medium"
+              onClick={()=>navigate("/register")}
+              className="text-purple-400 cursor-pointer font-medium"
             >
               Create one
             </button>

@@ -29,6 +29,20 @@ const navigate  =useNavigate();
     // Add your login logic here (show modal, form, etc.)
     // Example: setShowLoginModal(true);
   };
+    const handleRegisterClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("Login clicked - navigation prevented");
+    navigate("/register");
+    
+    // If you want to close mobile menu too
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+    
+    // Add your login logic here (show modal, form, etc.)
+    // Example: setShowLoginModal(true);
+  };
 
   return (
     <>
@@ -59,6 +73,9 @@ const navigate  =useNavigate();
             <span className="text-xl font-semibold">LOGO</span>
 
             {/* DESKTOP LOGIN - NAVIGATION PREVENTED */}
+            <div className="flex gap-2">
+
+    
             <Link
               to="/login"
               onClick={handleLoginClick}
@@ -67,7 +84,15 @@ const navigate  =useNavigate();
             >
               Login
             </Link>
-
+ <Link
+              to="/register"
+              onClick={handleRegisterClick}
+              onTouchStart={handleRegisterClick}
+              className="hidden md:flex items-center bg-purple-600 hover:bg-purple-700 px-10 h-10 rounded-full cursor-pointer"
+            >
+              Register
+            </Link>
+        </div>
             {/* ✅ MOBILE MENU BUTTON */}
             <button
               type="button"

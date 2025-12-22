@@ -6,7 +6,9 @@ import Regsiter from './pages/Regsiter';
 import Login from './pages/Login';
 import Chat from './pages/Chat';
 import { Toaster } from "react-hot-toast";
-  const queryClient = new QueryClient();
+import ProtectedRoute from './routes/ProtectedRoute';
+import PublicRoute from './routes/PublicRoute';
+const queryClient = new QueryClient();
 const App = () => {
 
   return (
@@ -15,11 +17,17 @@ const App = () => {
       <Toaster />
 
       <Routes>
-        <Route path="/" element={<HomePage/>}/>
-        <Route path="/register" element={<Regsiter/>}/>
-        <Route path="/login" element={<Login/>}/>
-        <Route path="/chat" element={<Chat/>}/>
+            <Route path="/" element={<HomePage />} />
+        <Route element={<PublicRoute />}>
 
+
+      
+          <Route path="/register" element={<Regsiter />} />
+          <Route path="/login" element={<Login />} />
+        </Route>
+        <Route element={<ProtectedRoute />}>
+          <Route path="/chat" element={<Chat />} />
+        </Route>
 
       </Routes>
     </QueryClientProvider>
