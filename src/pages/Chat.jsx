@@ -51,7 +51,7 @@ const ChatUI = () => {
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
-        const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
     // useEffect(() => {
     //     console.log("🔥 onlineUsers from socket:", onlineUsers);
     // }, [onlineUsers]);
@@ -68,8 +68,8 @@ const ChatUI = () => {
             );
         }
     }, [usersData]);
-    console.log("usersdata",usersData);
-console.log("userlist",userList);
+    console.log("usersdata", usersData);
+    console.log("userlist", userList);
     useEffect(() => {
         socket.on("connect", () => {
             console.log("✅ socket connected:", socket.id);
@@ -115,6 +115,24 @@ console.log("userlist",userList);
     useEffect(() => {
         scrollToBottom();
     }, [messagesData]);
+    useEffect(() => {
+        const handleMessagesSeen = ({ conversationId }) => {
+            setUserList(prev =>
+                prev.map(user =>
+                    user.conversationId === conversationId
+                        ? { ...user, unreadCount: 0 }
+                        : user
+                )
+            );
+        };
+
+        socket.on("messages-seen", handleMessagesSeen);
+
+        return () => {
+            socket.off("messages-seen", handleMessagesSeen);
+        };
+    }, []);
+
 
     useEffect(() => {
         if (!myUserId) return;
@@ -146,7 +164,7 @@ console.log("userlist",userList);
         return () => {
             socket.off("new-message");
         };
-    }, [activeChat,queryClient]);
+    }, [activeChat, queryClient]);
     // useEffect(() => {
     //     const handleConversationUpdate = (data) => {
     //         setUserList(prev =>
@@ -282,42 +300,42 @@ console.log("userlist",userList);
     //         setShowChatWindow(true);
     //     }
     // };
-// const handleChatSelect = (chat) => {
-//   setActiveChat(chat);
+    // const handleChatSelect = (chat) => {
+    //   setActiveChat(chat);
 
-//   // 🔴 optimistic UI update
-//   setUserList(prev =>
-//     prev.map(u =>
-//       u._id === chat._id ? { ...u, unreadCount: 0 } : u
-//     )
-//   );
+    //   // 🔴 optimistic UI update
+    //   setUserList(prev =>
+    //     prev.map(u =>
+    //       u._id === chat._id ? { ...u, unreadCount: 0 } : u
+    //     )
+    //   );
 
-//   // 🔴 backend update
-//   apiPut(`${apiPath.markSeen}/${chat._id}`);
+    //   // 🔴 backend update
+    //   apiPut(`${apiPath.markSeen}/${chat._id}`);
 
-//   if (isMobileView) {
-//     setShowChatList(false);
-//     setShowChatWindow(true);
-//   }
-// };
-const handleChatSelect = (chat) => {
-  setActiveChat(chat);
+    //   if (isMobileView) {
+    //     setShowChatList(false);
+    //     setShowChatWindow(true);
+    //   }
+    // };
+    const handleChatSelect = (chat) => {
+        setActiveChat(chat);
 
-  // optimistic UI
-  setUserList(prev =>
-    prev.map(u =>
-      u._id === chat._id ? { ...u, unreadCount: 0 } : u
-    )
-  );
+        // optimistic UI
+        setUserList(prev =>
+            prev.map(u =>
+                u._id === chat._id ? { ...u, unreadCount: 0 } : u
+            )
+        );
 
-  // ✅ correct ID
-  apiPut(`${apiPath.markSeen}/${chat.conversationId}`);
+        // ✅ correct ID
+        apiPut(`${apiPath.markSeen}/${chat.conversationId}`);
 
-  if (isMobileView) {
-    setShowChatList(false);
-    setShowChatWindow(true);
-  }
-};
+        if (isMobileView) {
+            setShowChatList(false);
+            setShowChatWindow(true);
+        }
+    };
 
 
     const handleBackToChats = () => {
