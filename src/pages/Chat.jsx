@@ -194,16 +194,20 @@ queryClient.setQueryData(
   socket.on("messages-seen", handleMessagesSeen);
   return () => socket.off("messages-seen", handleMessagesSeen);
 }, [activeChat, myUserId, queryClient]);
-
 useEffect(() => {
-  if (!activeChat || !showChatWindow) return;
+  if (!activeChat) return;
 
-  socket.emit("join-conversation", activeChat.conversationId);
+  if (showChatWindow) {
+    socket.emit("join-conversation", activeChat.conversationId);
+  } else {
+    socket.emit("leave-conversation", activeChat.conversationId);
+  }
 
   return () => {
     socket.emit("leave-conversation", activeChat.conversationId);
   };
-}, [activeChat, showChatWindow]);
+}, [activeChat?.conversationId, showChatWindow]);
+
 
 
 
