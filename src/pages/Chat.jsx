@@ -46,7 +46,8 @@ const ChatUI = () => {
     const [isMobileView, setIsMobileView] = useState(false);
     const [showChatList, setShowChatList] = useState(true);
     const [userList, setUserList] = useState([]);
-
+    console.log("showcahtList", showChatList);
+    console.log("userlist", userList);
     const [showChatWindow, setShowChatWindow] = useState(false);
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
@@ -57,17 +58,21 @@ const ChatUI = () => {
     // }, [onlineUsers]);
 
     useEffect(() => {
-        if (usersData) {
-            setUserList(
-                usersData.map(user => ({
-                    ...user,
-                    // lastMessage: "",
-                    // lastMessageAt: null,
-                    // unreadCount: 0,
-                }))
-            );
-        }
+        if (!usersData) return;
+        // if (usersData) {
+        //     setUserList(
+        //         // usersData.map(user => ({
+        //         //     ...user,
+        //         //     // lastMessage: "",
+        //         //     // lastMessageAt: null,
+        //         //     // unreadCount: 0,
+        //         // }))
+        //         usersData
+        //     );
+        setUserList(usersData);
+
     }, [usersData]);
+
     console.log("usersdata", usersData);
     console.log("userlist", userList);
     useEffect(() => {
@@ -79,6 +84,7 @@ const ChatUI = () => {
             console.log("❌ socket disconnected");
         });
     }, []);
+
 
     useEffect(() => {
         if (!isMobileView && usersData && usersData.length > 0) {
@@ -95,6 +101,8 @@ const ChatUI = () => {
             setShowChatWindow(true);
         }
     }, []);
+
+
 
     useEffect(() => {
         if (showChatWindow && isMobileView && inputRef.current) {
@@ -115,23 +123,23 @@ const ChatUI = () => {
     useEffect(() => {
         scrollToBottom();
     }, [messagesData]);
-    useEffect(() => {
-        const handleMessagesSeen = ({ conversationId }) => {
-            setUserList(prev =>
-                prev.map(user =>
-                    user.conversationId === conversationId
-                        ? { ...user, unreadCount: 0 }
-                        : user
-                )
-            );
-        };
+    // useEffect(() => {
+    //     const handleMessagesSeen = ({ conversationId }) => {
+    //         setUserList(prev =>
+    //             prev.map(user =>
+    //                 user.conversationId === conversationId
+    //                     ? { ...user, unreadCount: 0 }
+    //                     : user
+    //             )
+    //         );
+    //     };
 
-        socket.on("messages-seen", handleMessagesSeen);
+    //     socket.on("messages-seen", handleMessagesSeen);
 
-        return () => {
-            socket.off("messages-seen", handleMessagesSeen);
-        };
-    }, []);
+    //     return () => {
+    //         socket.off("messages-seen", handleMessagesSeen);
+    //     };
+    // }, []);
 
 
     useEffect(() => {
@@ -151,20 +159,68 @@ const ChatUI = () => {
         };
     }, [myUserId]);
 
-    useEffect(() => {
-        socket.on("new-message", (newMessage) => {
-            if (activeChat?._id === newMessage.senderId) {
-                queryClient.setQueryData(
-                    ["messages", activeChat._id],
-                    (old = []) => [...old, newMessage]
-                );
-            }
-        });
 
-        return () => {
-            socket.off("new-message");
-        };
-    }, [activeChat, queryClient]);
+useEffect(() => {
+  const handleMessagesSeen = ({ conversationId }) => {
+if (
+  !activeChat ||
+  !showChatWindow ||
+  activeChat.conversationId !== conversationId
+) return;
+
+
+    // ✅ update unread count in list
+    setUserList(prev =>
+      prev.map(user =>
+        user.conversationId === conversationId
+          ? { ...user, unreadCount: 0 }
+          : user
+      )
+    );
+
+    // ✅ update message status in cache
+queryClient.setQueryData(
+  ["messages", activeChat._id],
+  (old = []) =>
+    old.map(msg =>
+      msg.senderId === myUserId && msg.status !== "seen"
+        ? { ...msg, status: "seen" }
+        : msg
+    )
+);
+
+  };
+
+  socket.on("messages-seen", handleMessagesSeen);
+  return () => socket.off("messages-seen", handleMessagesSeen);
+}, [activeChat, myUserId, queryClient]);
+
+useEffect(() => {
+  if (!activeChat || !showChatWindow) return;
+
+  socket.emit("join-conversation", activeChat.conversationId);
+
+  return () => {
+    socket.emit("leave-conversation", activeChat.conversationId);
+  };
+}, [activeChat, showChatWindow]);
+
+
+
+    // useEffect(() => {
+    //     socket.on("new-message", (newMessage) => {
+    //         if (activeChat?._id === newMessage.senderId) {
+    //             queryClient.setQueryData(
+    //                 ["messages", activeChat._id],
+    //                 (old = []) => [...old, newMessage]
+    //             );
+    //         }
+    //     });
+
+    //     return () => {
+    //         socket.off("new-message");
+    //     };
+    // }, [activeChat, queryClient]);
     // useEffect(() => {
     //     const handleConversationUpdate = (data) => {
     //         setUserList(prev =>
@@ -206,40 +262,62 @@ const ChatUI = () => {
     //         socket.off("conversation-update", handleConversationUpdate);
     //     };
     // }, []);
+  useEffect(() => {
+const handleNewMessage = (newMessage) => {
+  if (!activeChat) return;
+
+  // 🔥 ignore my own message (already added by mutation)
+  if (newMessage.senderId === myUserId) return;
+
+  const isCurrentChat =
+    newMessage.senderId === activeChat._id ||
+    newMessage.receiverId === activeChat._id;
+
+  if (isCurrentChat) {
+    queryClient.setQueryData(
+      ["messages", activeChat._id],
+      (old = []) => [...old, newMessage]
+    );
+  }
+};
+
+  socket.off("new-message");
+  socket.on("new-message", handleNewMessage);
+  return () => socket.off("new-message", handleNewMessage);
+}, [activeChat, queryClient]);
+
     useEffect(() => {
-        const handleConversationUpdate = (data) => {
-            setUserList(prev =>
-                prev
-                    .map(user => {
-                        // receiver side
-                        if (user._id === data.senderId) {
-                            return {
-                                ...user,
-                                lastMessage: data.lastMessage,
-                                lastMessageAt: data.lastMessageAt,
-                                unreadCount: data.unreadCount,
-                            };
-                        }
+const handleConversationUpdate = (data) => {
+  setUserList(prev =>
+    prev.map(user => {
+      // receiver side
+      if (user._id === data.senderId) {
+        const isActive =
+          activeChat?.conversationId === data.conversationId &&
+          showChatWindow;
 
-                        // sender side (my list)
-                        if (user._id === data.receiverId) {
-                            return {
-                                ...user,
-                                lastMessage: data.lastMessage,
-                                lastMessageAt: data.lastMessageAt,
-                            };
-                        }
-
-                        return user;
-                    })
-                    // 🔥 WhatsApp jaisa reorder
-                    .sort(
-                        (a, b) =>
-                            new Date(b.lastMessageAt || 0) -
-                            new Date(a.lastMessageAt || 0)
-                    )
-            );
+        return {
+          ...user,
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+          unreadCount: isActive ? 0 : data.unreadCount,
         };
+      }
+
+      // sender side
+      if (user._id === data.receiverId) {
+        return {
+          ...user,
+          lastMessage: data.lastMessage,
+          lastMessageAt: data.lastMessageAt,
+        };
+      }
+
+      return user;
+    })
+  );
+};
+
 
         socket.on("conversation-update", handleConversationUpdate);
 
@@ -264,10 +342,10 @@ const ChatUI = () => {
         }
     });
 
-    const sendMessage = () => {
-        if (!message.trim() || !activeChat) return;
-        sendMessageMutation.mutate({ message });
-    };
+const sendMessage = () => {
+  if (!message.trim() || !activeChat || sendMessageMutation.isLoading) return;
+  sendMessageMutation.mutate({ message });
+};
 
     const getLastMessageForUser = (userId) => {
         const msgs = queryClient.getQueryData(["messages", userId]);
@@ -276,10 +354,20 @@ const ChatUI = () => {
         return lastMsg.length > 30 ? lastMsg.substring(0, 30) + "..." : lastMsg;
     };
 
+    // const formattedMessages = messagesData?.map((msg) => ({
+    //     id: msg._id,
+    //     text: msg.message,
+    //     sender: msg.senderId === myUserId ? "me" : "them",
+    //     time: new Date(msg.createdAt).toLocaleTimeString([], {
+    //         hour: "2-digit",
+    //         minute: "2-digit",
+    //     }),
+    // })) || [];
     const formattedMessages = messagesData?.map((msg) => ({
         id: msg._id,
         text: msg.message,
         sender: msg.senderId === myUserId ? "me" : "them",
+        status: msg.status, // ✅ IMPORTANT
         time: new Date(msg.createdAt).toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
@@ -631,11 +719,22 @@ const ChatUI = () => {
                                                     <span className="text-xs text-gray-400 font-medium bg-black/20 px-2 py-0.5 rounded">
                                                         {msg.time}
                                                     </span>
-                                                    {msg.sender === 'me' && (
-                                                        <div className="text-emerald-300">
-                                                            <BsCheck2All className="text-sm" />
-                                                        </div>
+                                                    {msg.sender === "me" && (
+                                                        <>
+                                                            {msg.status === "sent" && (
+                                                                <FiCheck className="text-gray-400 text-sm" />
+                                                            )}
+
+                                                            {msg.status === "delivered" && (
+                                                                <BsCheck2All className="text-gray-400 text-sm" />
+                                                            )}
+
+                                                            {msg.status === "seen" && (
+                                                                <BsCheck2All className="text-blue-500 text-sm" />
+                                                            )}
+                                                        </>
                                                     )}
+
                                                 </div>
                                             </div>
 
