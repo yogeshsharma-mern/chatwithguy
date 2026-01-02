@@ -3,13 +3,16 @@ import {
     FiSearch, FiPaperclip, FiSend, FiMoreVertical,
     FiVideo, FiPhone, FiCheck, FiImage,
     FiMic, FiUserPlus, FiSettings, FiMenu, FiX,
-    FiChevronLeft, FiMessageSquare, FiClock
+    FiChevronLeft, FiMessageSquare, FiClock,
+    FiChevronDown,
+    FiLogOut
 } from 'react-icons/fi';
 import { useQuery } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiPost, apiPut } from "../api/apiFetch";
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import Ballpit from './Ballpit';
+import { logout } from '../redux/features/auth/authSlice';
 import {
     BsCheck2All,
     BsArrowLeft, BsFillMicFill
@@ -40,11 +43,16 @@ const ChatUI = () => {
         queryFn: () => apiGet(`${apiPath.getMessages}/${activeChat._id}`),
         enabled: !!activeChat?._id,
     });
-
+const dispatch = useDispatch();
+  const handleLogout = () => {
+        dispatch(logout());
+        navigate('/login'); // or your login route
+    };
     const [message, setMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [isMobileView, setIsMobileView] = useState(false);
     const [showChatList, setShowChatList] = useState(true);
+    const [showSettingMenu,setshowSettingMenu] = useState(false);
     const [userList, setUserList] = useState([]);
     console.log("showcahtList", showChatList);
     console.log("userlist", userList);
@@ -57,10 +65,10 @@ const ChatUI = () => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const [recording, setRecording] = useState(false);
-const [recordingTime, setRecordingTime] = useState(0);
-const [showRecordingBubble, setShowRecordingBubble] = useState(false);
-const recordingTimerRef = useRef(null);
-const [recordedBlob, setRecordedBlob] = useState(null);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [showRecordingBubble, setShowRecordingBubble] = useState(false);
+    const recordingTimerRef = useRef(null);
+    const [recordedBlob, setRecordedBlob] = useState(null);
 
 
     // useEffect(() => {
@@ -375,64 +383,64 @@ const [recordedBlob, setRecordedBlob] = useState(null);
         if (!message.trim() || !activeChat || sendMessageMutation.isLoading) return;
         sendMessageMutation.mutate({ message });
     };
-const startRecording = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
 
-    mediaRecorderRef.current = mediaRecorder;
-    audioChunksRef.current = [];
-    setRecording(true);
-    setShowRecordingBubble(true);
-    setRecordingTime(0);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+            setRecording(true);
+            setShowRecordingBubble(true);
+            setRecordingTime(0);
 
-    // ⏱️ timer
-    recordingTimerRef.current = setInterval(() => {
-      setRecordingTime(prev => prev + 1);
-    }, 1000);
+            // ⏱️ timer
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
 
-    mediaRecorder.ondataavailable = (e) => {
-      audioChunksRef.current.push(e.data);
+            mediaRecorder.ondataavailable = (e) => {
+                audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                clearInterval(recordingTimerRef.current);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+        } catch (err) {
+            console.error("Mic permission denied", err);
+        }
     };
 
-    mediaRecorder.onstop = async () => {
-      clearInterval(recordingTimerRef.current);
-      stream.getTracks().forEach(track => track.stop());
+
+    const stopRecording = () => {
+        if (!mediaRecorderRef.current) return;
+
+        mediaRecorderRef.current.onstop = async () => {
+            const blob = new Blob(audioChunksRef.current, {
+                type: "audio/webm",
+            });
+
+            setRecordedBlob(blob); // store preview
+        };
+
+        mediaRecorderRef.current.stop();
+        setRecording(false);
     };
 
-    mediaRecorder.start();
-  } catch (err) {
-    console.error("Mic permission denied", err);
-  }
-};
 
+    const cancelRecording = () => {
+        if (!mediaRecorderRef.current) return;
 
-const stopRecording = () => {
-  if (!mediaRecorderRef.current) return;
+        mediaRecorderRef.current.stop();
+        audioChunksRef.current = [];
 
-  mediaRecorderRef.current.onstop = async () => {
-    const blob = new Blob(audioChunksRef.current, {
-      type: "audio/webm",
-    });
-
-    setRecordedBlob(blob); // store preview
-  };
-
-  mediaRecorderRef.current.stop();
-  setRecording(false);
-};
-
-
-const cancelRecording = () => {
-  if (!mediaRecorderRef.current) return;
-
-  mediaRecorderRef.current.stop();
-  audioChunksRef.current = [];
-
-  clearInterval(recordingTimerRef.current);
-  setRecording(false);
-  setShowRecordingBubble(false);
-};
+        clearInterval(recordingTimerRef.current);
+        setRecording(false);
+        setShowRecordingBubble(false);
+    };
 
     const getLastMessageForUser = (userId) => {
         const msgs = queryClient.getQueryData(["messages", userId]);
@@ -666,31 +674,119 @@ const cancelRecording = () => {
 
                             </div>
                         </div>
-
+{/* {
+    showSettingMenu && (
+<div className='absolute bottom-16 cursor-pointer right-0'>
+<div onClick={()=>(handleLogout)} className='bg-white rounded p-3'>
+Logout
+    </div>
+</div>
+    )
+} */}
                         {/* User Profile Footer */}
-                        <div className="p-4 border-t border-[#5D009F]/30 bg-[#12001f]/50">
-                            <div className="flex items-center justify-between">
+                       <div className="p-4 border-t border-[#5D009F]/30 bg-[#12001f]/50 relative">
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="relative">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5D009F] to-[#8B5CF6] overflow-hidden border-2 border-white/20">
+                        <img
+                            src={value?.user?.profilePic}
+                            alt="You"
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full border-2 border-black"></div>
+                </div>
+                <div>
+                    <h4 className="font-semibold text-white text-sm">{value?.user?.fullName}</h4>
+                    <p className="text-xs text-gray-400">Online</p>
+                </div>
+            </div>
+            
+            {/* Settings Button with Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setshowSettingMenu(!showSettingMenu)}
+                    className="p-2.5 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all duration-300 group flex items-center gap-1"
+                >
+                    <FiSettings className="text-[#C084FC] group-hover:text-white transition-colors" />
+                    <FiChevronDown className={`text-[#C084FC] text-xs transition-transform duration-300 ${showSettingMenu ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {/* Enhanced Logout Dropdown */}
+                {showSettingMenu && (
+                    <div 
+                        className="absolute bottom-full right-0 mb-2 w-56 origin-bottom-right animate-in slide-in-from-bottom-2 fade-in duration-200"
+                        onMouseLeave={() => setTimeout(() => setshowSettingMenu(false), 200)}
+                    >
+                        <div className="rounded-2xl bg-gradient-to-b from-black/90 to-[#12001f]/95 backdrop-blur-xl border border-[#5D009F]/30 shadow-2xl shadow-black/50 overflow-hidden">
+                            {/* User Info */}
+                            <div className="p-4 border-b border-[#5D009F]/30">
                                 <div className="flex items-center gap-3">
                                     <div className="relative">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#5D009F] to-[#8B5CF6] overflow-hidden border-2 border-white/20">
+                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#5D009F] to-[#8B5CF6] overflow-hidden border-2 border-white/20">
                                             <img
                                                 src={value?.user?.profilePic}
-                                                alt="You"
+                                                alt="Profile"
                                                 className="w-full h-full object-cover"
                                             />
                                         </div>
-                                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full border-2 border-black"></div>
                                     </div>
-                                    <div>
-                                        <h4 className="font-semibold text-white text-sm">{value?.user?.fullName}</h4>
-                                        <p className="text-xs text-gray-400">Online</p>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-white text-sm">{value?.user?.fullName}</h4>
+                                        <p className="text-xs text-gray-400 truncate">{value?.user?.email}</p>
                                     </div>
                                 </div>
-                                <button className="p-2 rounded-lg bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all">
-                                    <FiSettings className="text-[#C084FC]" />
+                            </div>
+                            
+                            {/* Menu Items */}
+                            <div className="p-2">
+                                <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#5D009F]/20 transition-all duration-200 group">
+                                    <FiSettings className="text-gray-400 group-hover:text-[#C084FC]" />
+                                    <span className="text-sm text-gray-300 group-hover:text-white">Settings</span>
+                                </button>
+                                {/* <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#5D009F]/20 transition-all duration-200 group">
+                                    <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+                                        <FaCrown className="text-white text-xs" />
+                                    </div>
+                                    <span className="text-sm text-gray-300 group-hover:text-white">Upgrade to Pro</span>
+                                </button> */}
+                            </div>
+                            
+                            {/* Logout Section */}
+                            <div className="p-2 border-t border-[#5D009F]/30">
+                                <button 
+                                    onClick={handleLogout}
+                                    className="w-full cursor-pointer flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-red-600/20 to-pink-600/20 hover:from-red-600/30 hover:to-pink-600/30 border border-red-500/30 hover:border-red-500/50 transition-all duration-300 group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-600 to-pink-600">
+                                            <FiLogOut className="text-white text-sm" />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-medium text-white">Logout</span>
+                                          
+                                        </div>
+                                    </div>
+                                    <div className="px-2 py-1 rounded-lg bg-black/50 border border-red-500/30">
+                                        <span className="text-xs text-red-400 font-medium">ESC</span>
+                                    </div>
                                 </button>
                             </div>
+                            
+                            {/* Version Info */}
+                            <div className="px-4 py-3 border-t border-[#5D009F]/30">
+                                <p className="text-xs text-gray-500 text-center">v1.0.0 • Messenger Pro</p>
+                            </div>
                         </div>
+                        
+                        {/* Dropdown Arrow */}
+                        <div className="absolute -bottom-2 right-4 w-4 h-4 bg-gradient-to-b from-black/90 to-[#12001f]/95 border border-[#5D009F]/30 transform rotate-45"></div>
+                    </div>
+                )}
+            </div>
+        </div>
+        </div>
                     </div>
                 </div>
 
@@ -738,7 +834,7 @@ const cancelRecording = () => {
                                                     </div>
                                                 )}
                                             </div>
-                                            <p className="text-sm text-gray-300">
+                                            <p className="text-[10px] md:text-sm text-gray-300">
                                                 {isUserOnline(activeChat?._id) ? "Active now" : "Last seen recently"}
                                             </p>
                                         </div>
@@ -874,39 +970,39 @@ const cancelRecording = () => {
                                     <div ref={messagesEndRef} />
                                 </div>
                             </div>
-{showRecordingBubble && (
-  <div className="flex items-center justify-between mb-3 px-4 py-3 rounded-2xl
+                            {showRecordingBubble && (
+                                <div className="flex items-center justify-between mb-3 px-4 py-3 rounded-2xl
     bg-gradient-to-r from-purple-600/20 to-pink-600/20
     border border-purple-500/30">
 
-    {/* Left */}
-    <div className="flex items-center gap-3">
-      <BsFillMicFill className="text-red-500 text-xl animate-pulse" />
-      <span className="text-sm text-white">{recordingTime}s</span>
-    </div>
+                                    {/* Left */}
+                                    <div className="flex items-center gap-3">
+                                        <BsFillMicFill className="text-red-500 text-xl animate-pulse" />
+                                        <span className="text-sm text-white">{recordingTime}s</span>
+                                    </div>
 
-    {/* Right */}
-    <div className="flex items-center gap-3">
-      <button
-        onClick={() => {
-          sendVoiceMessage(recordedBlob);
-          setRecordedBlob(null);
-          setShowRecordingBubble(false);
-        }}
-        className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm"
-      >
-        Send
-      </button>
+                                    {/* Right */}
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => {
+                                                sendVoiceMessage(recordedBlob);
+                                                setRecordedBlob(null);
+                                                setShowRecordingBubble(false);
+                                            }}
+                                            className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm"
+                                        >
+                                            Send
+                                        </button>
 
-      <button
-        onClick={cancelRecording}
-        className="text-red-400 hover:text-red-200"
-      >
-        <FiX />
-      </button>
-    </div>
-  </div>
-)}
+                                        <button
+                                            onClick={cancelRecording}
+                                            className="text-red-400 hover:text-red-200"
+                                        >
+                                            <FiX />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
 
                             {/* Message Input */}
