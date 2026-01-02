@@ -53,6 +53,16 @@ const ChatUI = () => {
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const queryClient = useQueryClient();
+    // 🎙️ Voice recording refs & state
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const [recording, setRecording] = useState(false);
+const [recordingTime, setRecordingTime] = useState(0);
+const [showRecordingBubble, setShowRecordingBubble] = useState(false);
+const recordingTimerRef = useRef(null);
+const [recordedBlob, setRecordedBlob] = useState(null);
+
+
     // useEffect(() => {
     //     console.log("🔥 onlineUsers from socket:", onlineUsers);
     // }, [onlineUsers]);
@@ -160,53 +170,53 @@ const ChatUI = () => {
     }, [myUserId]);
 
 
-useEffect(() => {
-  const handleMessagesSeen = ({ conversationId }) => {
-if (
-  !activeChat ||
-  !showChatWindow ||
-  activeChat.conversationId !== conversationId
-) return;
+    useEffect(() => {
+        const handleMessagesSeen = ({ conversationId }) => {
+            if (
+                !activeChat ||
+                !showChatWindow ||
+                activeChat.conversationId !== conversationId
+            ) return;
 
 
-    // ✅ update unread count in list
-    setUserList(prev =>
-      prev.map(user =>
-        user.conversationId === conversationId
-          ? { ...user, unreadCount: 0 }
-          : user
-      )
-    );
+            // ✅ update unread count in list
+            setUserList(prev =>
+                prev.map(user =>
+                    user.conversationId === conversationId
+                        ? { ...user, unreadCount: 0 }
+                        : user
+                )
+            );
 
-    // ✅ update message status in cache
-queryClient.setQueryData(
-  ["messages", activeChat._id],
-  (old = []) =>
-    old.map(msg =>
-      msg.senderId === myUserId && msg.status !== "seen"
-        ? { ...msg, status: "seen" }
-        : msg
-    )
-);
+            // ✅ update message status in cache
+            queryClient.setQueryData(
+                ["messages", activeChat._id],
+                (old = []) =>
+                    old.map(msg =>
+                        msg.senderId === myUserId && msg.status !== "seen"
+                            ? { ...msg, status: "seen" }
+                            : msg
+                    )
+            );
 
-  };
+        };
 
-  socket.on("messages-seen", handleMessagesSeen);
-  return () => socket.off("messages-seen", handleMessagesSeen);
-}, [activeChat, myUserId, queryClient]);
-useEffect(() => {
-  if (!activeChat) return;
+        socket.on("messages-seen", handleMessagesSeen);
+        return () => socket.off("messages-seen", handleMessagesSeen);
+    }, [activeChat, myUserId, queryClient]);
+    useEffect(() => {
+        if (!activeChat) return;
 
-  if (showChatWindow) {
-    socket.emit("join-conversation", activeChat.conversationId);
-  } else {
-    socket.emit("leave-conversation", activeChat.conversationId);
-  }
+        if (showChatWindow) {
+            socket.emit("join-conversation", activeChat.conversationId);
+        } else {
+            socket.emit("leave-conversation", activeChat.conversationId);
+        }
 
-  return () => {
-    socket.emit("leave-conversation", activeChat.conversationId);
-  };
-}, [activeChat?.conversationId, showChatWindow]);
+        return () => {
+            socket.emit("leave-conversation", activeChat.conversationId);
+        };
+    }, [activeChat?.conversationId, showChatWindow]);
 
 
 
@@ -266,61 +276,61 @@ useEffect(() => {
     //         socket.off("conversation-update", handleConversationUpdate);
     //     };
     // }, []);
-  useEffect(() => {
-const handleNewMessage = (newMessage) => {
-  if (!activeChat) return;
+    useEffect(() => {
+        const handleNewMessage = (newMessage) => {
+            if (!activeChat) return;
 
-  // 🔥 ignore my own message (already added by mutation)
-  if (newMessage.senderId === myUserId) return;
+            // 🔥 ignore my own message (already added by mutation)
+            if (newMessage.senderId === myUserId) return;
 
-  const isCurrentChat =
-    newMessage.senderId === activeChat._id ||
-    newMessage.receiverId === activeChat._id;
+            const isCurrentChat =
+                newMessage.senderId === activeChat._id ||
+                newMessage.receiverId === activeChat._id;
 
-  if (isCurrentChat) {
-    queryClient.setQueryData(
-      ["messages", activeChat._id],
-      (old = []) => [...old, newMessage]
-    );
-  }
-};
+            if (isCurrentChat) {
+                queryClient.setQueryData(
+                    ["messages", activeChat._id],
+                    (old = []) => [...old, newMessage]
+                );
+            }
+        };
 
-  socket.off("new-message");
-  socket.on("new-message", handleNewMessage);
-  return () => socket.off("new-message", handleNewMessage);
-}, [activeChat, queryClient]);
+        socket.off("new-message");
+        socket.on("new-message", handleNewMessage);
+        return () => socket.off("new-message", handleNewMessage);
+    }, [activeChat, queryClient]);
 
     useEffect(() => {
-const handleConversationUpdate = (data) => {
-  setUserList(prev =>
-    prev.map(user => {
-      // receiver side
-      if (user._id === data.senderId) {
-        const isActive =
-          activeChat?.conversationId === data.conversationId &&
-          showChatWindow;
+        const handleConversationUpdate = (data) => {
+            setUserList(prev =>
+                prev.map(user => {
+                    // receiver side
+                    if (user._id === data.senderId) {
+                        const isActive =
+                            activeChat?.conversationId === data.conversationId &&
+                            showChatWindow;
 
-        return {
-          ...user,
-          lastMessage: data.lastMessage,
-          lastMessageAt: data.lastMessageAt,
-          unreadCount: isActive ? 0 : data.unreadCount,
+                        return {
+                            ...user,
+                            lastMessage: data.lastMessage,
+                            lastMessageAt: data.lastMessageAt,
+                            unreadCount: isActive ? 0 : data.unreadCount,
+                        };
+                    }
+
+                    // sender side
+                    if (user._id === data.receiverId) {
+                        return {
+                            ...user,
+                            lastMessage: data.lastMessage,
+                            lastMessageAt: data.lastMessageAt,
+                        };
+                    }
+
+                    return user;
+                })
+            );
         };
-      }
-
-      // sender side
-      if (user._id === data.receiverId) {
-        return {
-          ...user,
-          lastMessage: data.lastMessage,
-          lastMessageAt: data.lastMessageAt,
-        };
-      }
-
-      return user;
-    })
-  );
-};
 
 
         socket.on("conversation-update", handleConversationUpdate);
@@ -345,10 +355,83 @@ const handleConversationUpdate = (data) => {
             setMessage("");
         }
     });
+    const sendVoiceMessage = async (audioBlob) => {
+        if (!activeChat) return;
 
-const sendMessage = () => {
-  if (!message.trim() || !activeChat || sendMessageMutation.isLoading) return;
-  sendMessageMutation.mutate({ message });
+        const formData = new FormData();
+        formData.append("audio", audioBlob);
+        formData.append("type", "audio");
+
+        await apiPost(
+            `${apiPath.sendMessage}/${activeChat._id}`,
+            formData,
+            {
+                headers: { "Content-Type": "multipart/form-data" },
+            }
+        );
+    };
+
+    const sendMessage = () => {
+        if (!message.trim() || !activeChat || sendMessageMutation.isLoading) return;
+        sendMessageMutation.mutate({ message });
+    };
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
+    setRecording(true);
+    setShowRecordingBubble(true);
+    setRecordingTime(0);
+
+    // ⏱️ timer
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingTime(prev => prev + 1);
+    }, 1000);
+
+    mediaRecorder.ondataavailable = (e) => {
+      audioChunksRef.current.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      clearInterval(recordingTimerRef.current);
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    mediaRecorder.start();
+  } catch (err) {
+    console.error("Mic permission denied", err);
+  }
+};
+
+
+const stopRecording = () => {
+  if (!mediaRecorderRef.current) return;
+
+  mediaRecorderRef.current.onstop = async () => {
+    const blob = new Blob(audioChunksRef.current, {
+      type: "audio/webm",
+    });
+
+    setRecordedBlob(blob); // store preview
+  };
+
+  mediaRecorderRef.current.stop();
+  setRecording(false);
+};
+
+
+const cancelRecording = () => {
+  if (!mediaRecorderRef.current) return;
+
+  mediaRecorderRef.current.stop();
+  audioChunksRef.current = [];
+
+  clearInterval(recordingTimerRef.current);
+  setRecording(false);
+  setShowRecordingBubble(false);
 };
 
     const getLastMessageForUser = (userId) => {
@@ -370,13 +453,16 @@ const sendMessage = () => {
     const formattedMessages = messagesData?.map((msg) => ({
         id: msg._id,
         text: msg.message,
+        audioUrl: msg.audioUrl,
+        type: msg.type,
         sender: msg.senderId === myUserId ? "me" : "them",
-        status: msg.status, // ✅ IMPORTANT
+        status: msg.status,
         time: new Date(msg.createdAt).toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
         }),
     })) || [];
+
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -713,7 +799,21 @@ const sendMessage = () => {
                                                         : 'bg-[#1a0033]/90 text-gray-100 border border-[#5D009F]/30 rounded-bl-lg shadow-black/20 backdrop-blur-sm'
                                                         }`}
                                                 >
-                                                    <p className="text-sm leading-relaxed break-words font-medium">{msg.text}</p>
+                                                    {msg.type === "audio" ? (
+                                                        <audio
+                                                            controls
+                                                            src={msg.audioUrl}
+                                                            className="w-56"
+                                                            onPlay={() =>
+                                                                apiPut(`${apiPath.markSeen}/${activeChat.conversationId}`)
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <p className="text-sm leading-relaxed break-words font-medium">
+                                                            {msg.text}
+                                                        </p>
+                                                    )}
+
                                                     {/* Enhanced Corner for better visibility */}
                                                     <div className={`absolute -bottom-2 ${msg.sender === 'me' ? '-right-2' : '-left-2'} w-4 h-4 ${msg.sender === 'me' ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6]' : 'bg-[#1a0033]'} transform rotate-45 border ${msg.sender === 'me' ? 'border-[#A855F7]/50' : 'border-[#5D009F]/30'}`}></div>
                                                 </div>
@@ -774,6 +874,40 @@ const sendMessage = () => {
                                     <div ref={messagesEndRef} />
                                 </div>
                             </div>
+{showRecordingBubble && (
+  <div className="flex items-center justify-between mb-3 px-4 py-3 rounded-2xl
+    bg-gradient-to-r from-purple-600/20 to-pink-600/20
+    border border-purple-500/30">
+
+    {/* Left */}
+    <div className="flex items-center gap-3">
+      <BsFillMicFill className="text-red-500 text-xl animate-pulse" />
+      <span className="text-sm text-white">{recordingTime}s</span>
+    </div>
+
+    {/* Right */}
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => {
+          sendVoiceMessage(recordedBlob);
+          setRecordedBlob(null);
+          setShowRecordingBubble(false);
+        }}
+        className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-sm"
+      >
+        Send
+      </button>
+
+      <button
+        onClick={cancelRecording}
+        className="text-red-400 hover:text-red-200"
+      >
+        <FiX />
+      </button>
+    </div>
+  </div>
+)}
+
 
                             {/* Message Input */}
                             <div className="p-4 border-t border-[#5D009F]/30 bg-gradient-to-r from-black/60 to-black/40">
@@ -804,20 +938,27 @@ const sendMessage = () => {
                                         </button>
                                     </div>
 
-                                    {/* Send Button */}
                                     <button
-                                        onClick={message.trim() ? sendMessage : () => { }}
-                                        className={`p-4 rounded-2xl transition-all duration-300 ${message.trim()
-                                            ? 'bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:from-[#8B5CF6] hover:to-[#A855F7] shadow-lg shadow-[#5D009F]/25 hover:shadow-[#8B5CF6]/30'
-                                            : 'bg-[#5D009F]/20 border border-[#8B5CF6]/20 hover:bg-[#8B5CF6]/30'
+                                        onMouseDown={!message.trim() ? startRecording : sendMessage}
+                                        onMouseUp={!message.trim() ? stopRecording : undefined}
+                                        onTouchStart={!message.trim() ? startRecording : undefined}
+                                        onTouchEnd={!message.trim() ? stopRecording : undefined}
+                                        className={`p-4 rounded-2xl transition-all duration-300 ${recording
+                                            ? "bg-red-600"
+                                            : message.trim()
+                                                ? "bg-gradient-to-r from-[#5D009F] to-[#8B5CF6]"
+                                                : "bg-[#5D009F]/20"
                                             }`}
                                     >
                                         {message.trim() ? (
                                             <IoMdSend className="text-white text-xl" />
                                         ) : (
-                                            <BsFillMicFill className="text-gray-300 text-xl" />
+                                            <BsFillMicFill
+                                                className={`text-xl ${recording ? "text-white animate-pulse" : "text-gray-300"}`}
+                                            />
                                         )}
                                     </button>
+
                                 </div>
 
                                 {/* Quick Tips */}
