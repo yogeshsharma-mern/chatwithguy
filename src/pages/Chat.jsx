@@ -184,7 +184,7 @@ async function initNotifications() {
         if (!registration) return;
 
         const fcmToken = await getToken(messaging, {
-            vapidKey: "YOUR_VAPID_KEY",
+            vapidKey: "BAs3TzpCXRzxtrcf-8kaYgfCXojcgruMUrXuU2s2GrbG7VDKea3Oaa22WRi3MjJ8WQcGABn6jARBxiEyaNXrJcE",
             serviceWorkerRegistration: registration,
         });
 
