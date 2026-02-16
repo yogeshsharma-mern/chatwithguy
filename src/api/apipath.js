@@ -92,7 +92,8 @@ const apiPath = Object.freeze({
     getAllLeaders: "/leadership/allleader",
     updateLeaderInfo: "/leadership/updateleader",
     deleteLeaderInfo: "/leadership/deleteleader",
-    aboutinfoDelete: "/admins/about"
+    aboutinfoDelete: "/admins/about",
+    registerDevice:"/api/notifications/register-device"
 
 
 

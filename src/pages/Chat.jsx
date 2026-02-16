@@ -92,6 +92,22 @@ const ChatUI = () => {
     // }, [onlineUsers]);
 
     useEffect(() => {
+        console.log("notificaiton", Notification.permission);
+
+    }, [])
+    const registerDeviceMutation = useMutation({
+    mutationFn: (data) => apiPost(apiPath.registerDevice, data),
+
+    onSuccess: (res) => {
+        console.log("✅ Token stored in backend");
+    },
+
+    onError: (err) => {
+        console.log("❌ Token store failed", err);
+    }
+});
+
+    useEffect(() => {
         if (!usersData) return;
         // if (usersData) {
         //     setUserList(
@@ -106,17 +122,21 @@ const ChatUI = () => {
         setUserList(usersData);
 
     }, [usersData]);
-    useEffect(() => {
-        checkNotificationSupport();
-        initNotifications();
+useEffect(() => {
+    checkNotificationSupport();
 
-        const unsubscribe = onMessage(messaging, (payload) => {
+    const unsubscribe = onMessage(messaging, (payload) => {
+        toast.success(payload.notification?.body);
+    });
 
-            toast.success(payload.notification.title);
-        });
+    return () => unsubscribe();
+}, []);
+useEffect(() => {
+    if (!myUserId) return;
 
-        return () => unsubscribe();
-    }, []);
+    initNotifications();
+}, [myUserId]);
+
     const checkNotificationSupport = () => {
         if (!("Notification" in window)) {
             setIsNotificationSupported(false);
@@ -151,7 +171,7 @@ const ChatUI = () => {
             if (!registration) return;
 
             const fcmToken = await getToken(messaging, {
-                vapidKey: "YOUR_PUBLIC_VAPID_KEY",
+                vapidKey: "BAs3TzpCXRzxtrcf-8kaYgfCXojcgruMUrXuU2s2GrbG7VDKea3Oaa22WRi3MjJ8WQcGABn6jARBxiEyaNXrJcE",
                 serviceWorkerRegistration: registration,
             });
 
@@ -159,10 +179,11 @@ const ChatUI = () => {
 
             setToken(fcmToken);
 
-            await axios.post("http://localhost:5000/register-device", {
+            registerDeviceMutation.mutate({
                 fcmToken,
-                userId: myUserId   // ⭐ IMPORTANT FOR CHAT
+                userId: myUserId
             });
+
 
         } catch (err) {
             console.error(err);
@@ -198,39 +219,39 @@ const ChatUI = () => {
         }
     }, []);
 
-useEffect(() => {
-  const handleVisibilityChange = () => {
-    if (document.visibilityState === "visible") {
-      console.log("👀 User returned → reconnect socket");
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                console.log("👀 User returned → reconnect socket");
 
-      if (!socket.connected) {
-        socket.connect();
-      }
+                if (!socket.connected) {
+                    socket.connect();
+                }
 
-      if (myUserId) {
-        socket.emit("setup", myUserId);
-      }
-    }
-  };
+                if (myUserId) {
+                    socket.emit("setup", myUserId);
+                }
+            }
+        };
 
-  document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
-  return () =>
-    document.removeEventListener("visibilitychange", handleVisibilityChange);
-}, [myUserId]);
-useEffect(() => {
-  const handleReconnect = () => {
-    console.log("♻️ Socket reconnected:", socket.id);
+        return () =>
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, [myUserId]);
+    useEffect(() => {
+        const handleReconnect = () => {
+            console.log("♻️ Socket reconnected:", socket.id);
 
-    if (myUserId) {
-      socket.emit("setup", myUserId);
-    }
-  };
+            if (myUserId) {
+                socket.emit("setup", myUserId);
+            }
+        };
 
-  socket.on("reconnect", handleReconnect);
+        socket.on("reconnect", handleReconnect);
 
-  return () => socket.off("reconnect", handleReconnect);
-}, [myUserId]);
+        return () => socket.off("reconnect", handleReconnect);
+    }, [myUserId]);
 
 
     useEffect(() => {
@@ -366,17 +387,17 @@ useEffect(() => {
         socket.on("messages-seen", handleMessagesSeen);
         return () => socket.off("messages-seen", handleMessagesSeen);
     }, [activeChat, myUserId, queryClient]);
-useEffect(() => {
-  if (!activeChat?.conversationId || !socket.connected) return;
+    useEffect(() => {
+        if (!activeChat?.conversationId || !socket.connected) return;
 
-  console.log("✅ Joining conversation:", activeChat.conversationId);
+        console.log("✅ Joining conversation:", activeChat.conversationId);
 
-  socket.emit("join-conversation", activeChat.conversationId);
+        socket.emit("join-conversation", activeChat.conversationId);
 
-  return () => {
-    socket.emit("leave-conversation", activeChat.conversationId);
-  };
-}, [activeChat?.conversationId, socket.connected]);
+        return () => {
+            socket.emit("leave-conversation", activeChat.conversationId);
+        };
+    }, [activeChat?.conversationId]);
 
 
 
@@ -515,13 +536,7 @@ useEffect(() => {
             timeout = setTimeout(later, wait);
         };
     };
-    const handleTyping = debounce(() => {
-        if (!activeChat?.conversationId) return;
 
-        socket.emit("typing", {
-            conversationId: activeChat.conversationId,
-        });
-    }, 500);
 
     const sendMessageMutation = useMutation({
         mutationFn: (payload) =>
@@ -1154,7 +1169,7 @@ Logout
                             </div>
 
                             {/* Messages Area - Enhanced Bubble Visibility */}
-                     <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-14">
+                            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-14">
 
                                 <div className="max-w-4xl mx-auto space-y-4">
                                     {/* Welcome Message */}

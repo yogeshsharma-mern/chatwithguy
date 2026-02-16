@@ -14,13 +14,26 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-self.addEventListener("push", function(event) {
-  console.log("🔥 Push received in SW");
 
-  const data = event.data.json();
+messaging.onBackgroundMessage(async (payload) => {
 
-  self.registration.showNotification(data.notification.title, {
-    body: data.notification.body,
-    icon: "/icon.png"
-  });
+    console.log("📩 Background Notification:", payload);
+
+    self.registration.showNotification(payload.notification.title, {
+        body: payload.notification.body,
+        icon: "/logo.png",
+    });
+
+    // ✅ SAVE TO DATABASE
+    await fetch("http://localhost:5000/save-notification", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            title: payload.notification?.title,
+            body: payload.notification?.body,
+            data: payload.data,
+        }),
+    });
 });
