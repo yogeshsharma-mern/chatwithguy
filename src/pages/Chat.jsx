@@ -13,6 +13,7 @@ import { apiPost, apiPut } from "../api/apiFetch";
 import { useDispatch, useSelector } from 'react-redux';
 import Ballpit from './Ballpit';
 import { logout } from '../redux/features/auth/authSlice';
+import { useNavigate } from 'react-router-dom';
 import {
     BsCheck2All,
     BsArrowLeft, BsFillMicFill
@@ -83,6 +84,7 @@ const ChatUI = () => {
     // const [selectedImage, setSelectedImage] = useState(null);
     const [sendingImage, setSendingImage] = useState(false);
     const typingTimeoutRef = useRef(null);
+    const navigate = useNavigate();
 
     const [isSending, setIsSending] = useState(false);
     const [isSendingImage, setIsSendingImage] = useState(false);
@@ -92,10 +94,11 @@ const ChatUI = () => {
     //     console.log("🔥 onlineUsers from socket:", onlineUsers);
     // }, [onlineUsers]);
 
-    useEffect(() => {
-        console.log("notificaiton", Notification.permission);
-
-    }, [])
+useEffect(() => {
+   if (typeof Notification !== "undefined") {
+      console.log("notification", Notification.permission);
+   }
+}, []);
     const registerDeviceMutation = useMutation({
     mutationFn: (data) => apiPost(apiPath.registerDevice, data),
 
@@ -666,36 +669,36 @@ async function initNotifications() {
         );
     };
 
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+    // const startRecording = async () => {
+    //     try {
+    //         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    //         const mediaRecorder = new MediaRecorder(stream);
 
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-            setRecording(true);
-            setShowRecordingBubble(true);
-            setRecordingTime(0);
+    //         mediaRecorderRef.current = mediaRecorder;
+    //         audioChunksRef.current = [];
+    //         setRecording(true);
+    //         setShowRecordingBubble(true);
+    //         setRecordingTime(0);
 
-            // ⏱️ timer
-            recordingTimerRef.current = setInterval(() => {
-                setRecordingTime(prev => prev + 1);
-            }, 1000);
+    //         // ⏱️ timer
+    //         recordingTimerRef.current = setInterval(() => {
+    //             setRecordingTime(prev => prev + 1);
+    //         }, 1000);
 
-            mediaRecorder.ondataavailable = (e) => {
-                audioChunksRef.current.push(e.data);
-            };
+    //         mediaRecorder.ondataavailable = (e) => {
+    //             audioChunksRef.current.push(e.data);
+    //         };
 
-            mediaRecorder.onstop = async () => {
-                clearInterval(recordingTimerRef.current);
-                stream.getTracks().forEach(track => track.stop());
-            };
+    //         mediaRecorder.onstop = async () => {
+    //             clearInterval(recordingTimerRef.current);
+    //             stream.getTracks().forEach(track => track.stop());
+    //         };
 
-            mediaRecorder.start();
-        } catch (err) {
-            console.error("Mic permission denied", err);
-        }
-    };
+    //         mediaRecorder.start();
+    //     } catch (err) {
+    //         console.error("Mic permission denied", err);
+    //     }
+    // };
 
 
     const stopRecording = () => {
