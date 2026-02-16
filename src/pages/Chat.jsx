@@ -669,52 +669,64 @@ async function initNotifications() {
         );
     };
 
-    // const startRecording = async () => {
-    //     try {
-    //         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    //         const mediaRecorder = new MediaRecorder(stream);
+const startRecording = async () => {
+    try {
+        // ✅ SAFETY CHECKS FOR IPHONE
+        if (typeof window === "undefined") return;
+        if (!("mediaDevices" in navigator)) return;
+        if (!window.MediaRecorder) {
+            alert("Voice recording not supported on this device");
+            return;
+        }
 
-    //         mediaRecorderRef.current = mediaRecorder;
-    //         audioChunksRef.current = [];
-    //         setRecording(true);
-    //         setShowRecordingBubble(true);
-    //         setRecordingTime(0);
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    //         // ⏱️ timer
-    //         recordingTimerRef.current = setInterval(() => {
-    //             setRecordingTime(prev => prev + 1);
-    //         }, 1000);
+        const mediaRecorder = new MediaRecorder(stream);
 
-    //         mediaRecorder.ondataavailable = (e) => {
-    //             audioChunksRef.current.push(e.data);
-    //         };
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
 
-    //         mediaRecorder.onstop = async () => {
-    //             clearInterval(recordingTimerRef.current);
-    //             stream.getTracks().forEach(track => track.stop());
-    //         };
+        setRecording(true);
+        setShowRecordingBubble(true);
+        setRecordingTime(0);
 
-    //         mediaRecorder.start();
-    //     } catch (err) {
-    //         console.error("Mic permission denied", err);
-    //     }
-    // };
+        recordingTimerRef.current = setInterval(() => {
+            setRecordingTime(prev => prev + 1);
+        }, 1000);
 
-
-    const stopRecording = () => {
-        if (!mediaRecorderRef.current) return;
-
-        mediaRecorderRef.current.onstop = async () => {
-            const blob = new Blob(audioChunksRef.current, {
-                type: "audio/webm",
-            });
-
-            setRecordedBlob(blob); // store preview
+        mediaRecorder.ondataavailable = (e) => {
+            audioChunksRef.current.push(e.data);
         };
 
-        mediaRecorderRef.current.stop();
-        setRecording(false);
+        mediaRecorder.onstop = () => {
+            clearInterval(recordingTimerRef.current);
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+
+    } catch (err) {
+        console.error("Mic error:", err);
+    }
+};
+
+
+const stopRecording = () => {
+    if (!mediaRecorderRef.current) return;
+    if (!window.MediaRecorder) return;   // ✅ safety
+
+    mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, {
+            type: "audio/webm",
+        });
+
+        setRecordedBlob(blob);
     };
+
+    mediaRecorderRef.current.stop();
+    setRecording(false);
+};
+
     const handleRemoveImage = () => {
         setSelectedImage(null);
 
