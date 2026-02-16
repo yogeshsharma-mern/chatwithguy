@@ -26,7 +26,8 @@ import apiPath from '../api/apipath';
 import { apiGet } from '../api/apiFetch';
 
 import socket from '../socket';
-import { messaging } from "../firebase";
+import { getMessagingSafe } from "../firebase";
+
 import { getToken } from "firebase/messaging";
 import { onMessage } from "firebase/messaging";
 import toast, { Toaster } from 'react-hot-toast';
@@ -158,37 +159,33 @@ useEffect(() => {
         return registration;
     }
 
-    async function initNotifications() {
-        try {
-            if (!("Notification" in window)) return;
+async function initNotifications() {
+    try {
+        const messaging = await getMessagingSafe();
+        if (!messaging) return; // ⭐ prevents iPhone crash
 
-            const permission = await Notification.requestPermission();
+        if (!("Notification" in window)) return;
 
-            if (permission !== "granted") return;
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") return;
 
-            const registration = await registerServiceWorker();
+        const registration = await registerServiceWorker();
+        if (!registration) return;
 
-            if (!registration) return;
+        const fcmToken = await getToken(messaging, {
+            vapidKey: "YOUR_VAPID_KEY",
+            serviceWorkerRegistration: registration,
+        });
 
-            const fcmToken = await getToken(messaging, {
-                vapidKey: "BAs3TzpCXRzxtrcf-8kaYgfCXojcgruMUrXuU2s2GrbG7VDKea3Oaa22WRi3MjJ8WQcGABn6jARBxiEyaNXrJcE",
-                serviceWorkerRegistration: registration,
-            });
+        registerDeviceMutation.mutate({
+            fcmToken,
+            userId: myUserId
+        });
 
-            console.log("✅ FCM TOKEN:", fcmToken);
-
-            setToken(fcmToken);
-
-            registerDeviceMutation.mutate({
-                fcmToken,
-                userId: myUserId
-            });
-
-
-        } catch (err) {
-            console.error(err);
-        }
+    } catch (err) {
+        console.error(err);
     }
+}
 
     console.log("usersdata", usersData);
     console.log("userlist", userList);
@@ -352,6 +349,23 @@ useEffect(() => {
         };
     }, [myUserId]);
 
+useEffect(() => {
+    let unsubscribe;
+
+    const init = async () => {
+        const messaging = await getMessagingSafe();
+
+        if (!messaging) return; // ⭐ iPhone safe exit
+
+        unsubscribe = onMessage(messaging, (payload) => {
+            toast.success(payload.notification?.body);
+        });
+    };
+
+    init();
+
+    return () => unsubscribe && unsubscribe();
+}, []);
 
     useEffect(() => {
         const handleMessagesSeen = ({ conversationId }) => {
