@@ -24,7 +24,12 @@ import { RiUserStarFill } from 'react-icons/ri';
 import { TbMessageCircle } from 'react-icons/tb';
 import apiPath from '../api/apipath';
 import { apiGet } from '../api/apiFetch';
+
 import socket from '../socket';
+import { messaging } from "../firebase";
+import { getToken } from "firebase/messaging";
+import { onMessage } from "firebase/messaging";
+import toast, { Toaster } from 'react-hot-toast';
 
 const ChatUI = () => {
     const { data: usersData, isLoading, isFetching, error, isError } = useQuery({
@@ -35,6 +40,9 @@ const ChatUI = () => {
     const [chats, setChats] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
     const [onlineUsers, setOnlineUsers] = useState([]);
+    const [token, setToken] = useState(null);
+    const [isNotificationSupported, setIsNotificationSupported] = useState(true);
+    const [permissionStatus, setPermissionStatus] = useState('default');
     const value = useSelector((state) => state.auth);
     const myUserId = value?.user?._id;
 
@@ -71,9 +79,12 @@ const ChatUI = () => {
     const [showRecordingBubble, setShowRecordingBubble] = useState(false);
     const recordingTimerRef = useRef(null);
     const [recordedBlob, setRecordedBlob] = useState(null);
-// const [selectedImage, setSelectedImage] = useState(null);
-const [sendingImage, setSendingImage] = useState(false);
+    // const [selectedImage, setSelectedImage] = useState(null);
+    const [sendingImage, setSendingImage] = useState(false);
+    const typingTimeoutRef = useRef(null);
 
+    const [isSending, setIsSending] = useState(false);
+    const [isSendingImage, setIsSendingImage] = useState(false);
 
 
     // useEffect(() => {
@@ -95,6 +106,68 @@ const [sendingImage, setSendingImage] = useState(false);
         setUserList(usersData);
 
     }, [usersData]);
+    useEffect(() => {
+        checkNotificationSupport();
+        initNotifications();
+
+        const unsubscribe = onMessage(messaging, (payload) => {
+
+            toast.success(payload.notification.title);
+        });
+
+        return () => unsubscribe();
+    }, []);
+    const checkNotificationSupport = () => {
+        if (!("Notification" in window)) {
+            setIsNotificationSupported(false);
+        } else {
+            setPermissionStatus(Notification.permission);
+        }
+    };
+    async function registerServiceWorker() {
+        if (!("serviceWorker" in navigator)) return null;
+
+        const registration = await navigator.serviceWorker.register(
+            "/firebase-messaging-sw.js"
+        );
+
+        await navigator.serviceWorker.ready;
+
+        console.log("✅ SW ready");
+
+        return registration;
+    }
+
+    async function initNotifications() {
+        try {
+            if (!("Notification" in window)) return;
+
+            const permission = await Notification.requestPermission();
+
+            if (permission !== "granted") return;
+
+            const registration = await registerServiceWorker();
+
+            if (!registration) return;
+
+            const fcmToken = await getToken(messaging, {
+                vapidKey: "YOUR_PUBLIC_VAPID_KEY",
+                serviceWorkerRegistration: registration,
+            });
+
+            console.log("✅ FCM TOKEN:", fcmToken);
+
+            setToken(fcmToken);
+
+            await axios.post("http://localhost:5000/register-device", {
+                fcmToken,
+                userId: myUserId   // ⭐ IMPORTANT FOR CHAT
+            });
+
+        } catch (err) {
+            console.error(err);
+        }
+    }
 
     console.log("usersdata", usersData);
     console.log("userlist", userList);
@@ -142,6 +215,49 @@ const [sendingImage, setSendingImage] = useState(false);
     const isUserOnline = (userId) => onlineUsers.includes(userId);
 
 
+    const emitTyping = (e) => {
+        const value = e.target.value;
+        setMessage(value);
+
+        if (!activeChat?.conversationId) return;
+
+        socket.emit("typing", {
+            conversationId: activeChat.conversationId,
+        });
+
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+            socket.emit("stop-typing", {
+                conversationId: activeChat.conversationId,
+            });
+        }, 1000);
+    };
+    useEffect(() => {
+        if (!activeChat?.conversationId) return;
+
+        const handleUserTyping = ({ conversationId }) => {
+            if (conversationId === activeChat.conversationId) {
+                setIsTyping(true);
+            }
+        };
+
+        const handleUserStopTyping = ({ conversationId }) => {
+            if (conversationId === activeChat.conversationId) {
+                setIsTyping(false);
+            }
+        };
+
+        socket.on("typing", handleUserTyping);
+        socket.on("stop-typing", handleUserStopTyping);
+
+        return () => {
+            socket.off("typing", handleUserTyping);
+            socket.off("stop-typing", handleUserStopTyping);
+        };
+    }, [activeChat?.conversationId]);
 
     useEffect(() => {
         scrollToBottom();
@@ -355,19 +471,50 @@ const [sendingImage, setSendingImage] = useState(false);
 
 
 
+    // Debounce utility function
+    const debounce = (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    };
+    const handleTyping = debounce(() => {
+        if (!activeChat?.conversationId) return;
 
+        socket.emit("typing", {
+            conversationId: activeChat.conversationId,
+        });
+    }, 500);
 
     const sendMessageMutation = useMutation({
         mutationFn: (payload) =>
             apiPost(`${apiPath.sendMessage}/${activeChat._id}`, payload),
+        onMutate: () => {
+            setIsSending(true);
+        },
         onSuccess: (savedMessage) => {
             queryClient.setQueryData(
                 ["messages", activeChat._id],
                 (old = []) => [...old, savedMessage]
             );
             setMessage("");
+            setIsSending(false);
+        },
+        onError: (error) => {
+            console.error("Failed to send message:", error);
+            toast.error("Failed to send message");
+            setIsSending(false);
+        },
+        onSettled: () => {
+            setIsSending(false);
         }
     });
+
     const sendVoiceMessage = async (audioBlob) => {
         if (!activeChat) return;
 
@@ -383,58 +530,66 @@ const [sendingImage, setSendingImage] = useState(false);
             }
         );
     };
-
     const sendMessage = () => {
-        if (!message.trim() || !activeChat || sendMessageMutation.isLoading) return;
+        if (!message.trim() || !activeChat || isSending) return;
         sendMessageMutation.mutate({ message });
     };
-const handleSendImage = async () => {
-  if (!selectedImage || !activeChat) return;
+    const handleSendImage = async () => {
+        if (!selectedImage || !activeChat || isSendingImage) return;
 
-  const tempId = Date.now();
+        setIsSendingImage(true);
+        const tempId = Date.now();
 
-  // 🔥 ADD LOCAL IMAGE FIRST (CLEAR)
-  const optimisticMsg = {
-    _id: tempId,
-    type: "image",
-    imageUrl: URL.createObjectURL(selectedImage),
-    senderId: myUserId,
-    status: "sending",
-    createdAt: new Date(),
-  };
+        // Add optimistic message
+        const optimisticMsg = {
+            _id: tempId,
+            type: "image",
+            imageUrl: URL.createObjectURL(selectedImage),
+            senderId: myUserId,
+            status: "sending",
+            createdAt: new Date(),
+        };
 
-  queryClient.setQueryData(
-    ["messages", activeChat._id],
-    (old = []) => [...old, optimisticMsg]
-  );
+        queryClient.setQueryData(
+            ["messages", activeChat._id],
+            (old = []) => [...old, optimisticMsg]
+        );
 
-  setSelectedImage(null);
+        setSelectedImage(null);
 
-  try {
-    const formData = new FormData();
-    formData.append("image", selectedImage);
-    formData.append("type", "image");
+        // Reset file input
+        if (imageInputRef.current) {
+            imageInputRef.current.value = "";
+        }
 
-    const response = await apiPost(
-      `${apiPath.sendMessage}/${activeChat._id}`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
+        try {
+            const formData = new FormData();
+            formData.append("image", selectedImage);
+            formData.append("type", "image");
 
-    // 🔄 REPLACE TEMP MESSAGE WITH SERVER MESSAGE
-    queryClient.setQueryData(
-      ["messages", activeChat._id],
-      (old = []) =>
-        old.map((m) => (m._id === tempId ? response : m))
-    );
-  } catch (err) {
-    // ❌ remove temp msg on failure
-    queryClient.setQueryData(
-      ["messages", activeChat._id],
-      (old = []) => old.filter((m) => m._id !== tempId)
-    );
-  }
-};
+            const response = await apiPost(
+                `${apiPath.sendMessage}/${activeChat._id}`,
+                formData,
+                { headers: { "Content-Type": "multipart/form-data" } }
+            );
+
+            // Replace temp message with server message
+            queryClient.setQueryData(
+                ["messages", activeChat._id],
+                (old = []) =>
+                    old.map((m) => (m._id === tempId ? response : m))
+            );
+        } catch (err) {
+            // Remove temp message on failure
+            queryClient.setQueryData(
+                ["messages", activeChat._id],
+                (old = []) => old.filter((m) => m._id !== tempId)
+            );
+            toast.error("Failed to send image");
+        } finally {
+            setIsSendingImage(false);
+        }
+    };
 
 
     const sendImage = async (file) => {
@@ -501,14 +656,14 @@ const handleSendImage = async () => {
         mediaRecorderRef.current.stop();
         setRecording(false);
     };
-const handleRemoveImage = () => {
-  setSelectedImage(null);
+    const handleRemoveImage = () => {
+        setSelectedImage(null);
 
-  // 🔥 THIS IS THE FIX
-  if (imageInputRef.current) {
-    imageInputRef.current.value = "";
-  }
-};
+        // 🔥 THIS IS THE FIX
+        if (imageInputRef.current) {
+            imageInputRef.current.value = "";
+        }
+    };
 
     const cancelRecording = () => {
         if (!mediaRecorderRef.current) return;
@@ -615,13 +770,24 @@ const handleRemoveImage = () => {
         }
     };
 
-const handleSend = () => {
-  if (selectedImage) {
-    handleSendImage();
-  } else if (message.trim()) {
-    sendMessage();
-  }
-};
+    const handleSend = () => {
+        if (selectedImage) {
+            handleSendImage();
+        } else if (message.trim() && !isSending) {
+            sendMessage();
+        }
+    };
+
+    // Add debounce to prevent multiple rapid sends
+    const handleSendDebounced = useRef(
+        debounce(() => {
+            if (selectedImage) {
+                handleSendImage();
+            } else if (message.trim() && !isSending) {
+                sendMessage();
+            }
+        }, 300)
+    ).current;
 
     const handleBackToChats = () => {
         if (isMobileView) {
@@ -658,6 +824,7 @@ const handleSend = () => {
     return (
         <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black to-[#3B006E]">
             {/* Animated Background - Matching Hero Section */}
+            <Toaster />
             <div className="absolute inset-0 z-0 pointer-events-none">
                 <Ballpit
                     count={100}
@@ -1121,103 +1288,98 @@ Logout
                                         </button>
                                         <button
                                             onClick={() => imageInputRef.current.click()}
+                                            disabled={isSending || isSendingImage}
                                             className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30
-             border border-[#8B5CF6]/20 transition-all group"
+                            border border-[#8B5CF6]/20 transition-all group
+                            disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <MdPhotoCamera className="text-xl text-gray-300 group-hover:text-white" />
                                         </button>
-
                                     </div>
 
-
                                     {/* Input Field */}
-                                  <div className="flex-1 relative bg-[#12001f]/60 border border-[#5D009F]/30 rounded-2xl px-3 py-2">
+                                    <div className="flex-1 relative bg-[#12001f]/60 border border-[#5D009F]/30 rounded-2xl px-3 py-2">
+                                        {/* IMAGE PREVIEW */}
+                                        {selectedImage && (
+                                            <div className="relative mb-2">
+                                                <img
+                                                    src={URL.createObjectURL(selectedImage)}
+                                                    alt="preview"
+                                                    className="max-h-40 rounded-xl object-cover w-full"
+                                                />
+                                                <button
+                                                    onClick={handleRemoveImage}
+                                                    disabled={isSending || isSendingImage}
+                                                    className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1
+                                    disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <FiX size={16} />
+                                                </button>
+                                            </div>
+                                        )}
 
-  {/* IMAGE PREVIEW (WhatsApp style) */}
-  {selectedImage && (
-    <div className="relative mb-2">
-      <img
-        src={URL.createObjectURL(selectedImage)}
-        alt="preview"
-        className="max-h-40 rounded-xl object-cover w-full"
-      />
+                                        {/* TEXT INPUT */}
+                                        <textarea
+                                            ref={inputRef}
+                                            value={message}
 
-      <button
-        onClick={handleRemoveImage}
-        className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1"
-      >
-        <FiX size={16} />
-      </button>
-    </div>
-  )}
+                                            onKeyPress={handleKeyPress}
+                                            onChange={emitTyping}
+                                            disabled={isSending || isSendingImage}
+                                            placeholder={`Message ${activeChat?.fullName}...`}
+                                            className="w-full bg-transparent focus:outline-none text-white placeholder-gray-400 
+                            resize-none min-h-[40px] max-h-[120px] disabled:opacity-50"
+                                            rows="1"
+                                        />
+                                    </div>
 
-  {/* TEXT INPUT */}
-  <textarea
-    ref={inputRef}
-    value={message}
-    onChange={(e) => setMessage(e.target.value)}
-    onKeyPress={handleKeyPress}
-    placeholder={`Message ${activeChat?.fullName}...`}
-    className="w-full bg-transparent focus:outline-none text-white placeholder-gray-400 resize-none min-h-[40px] max-h-[120px]"
-    rows="1"
-  />
-</div>
-
-{/* 
+                                    {/* UPDATED SEND BUTTON WITH LOADER */}
                                     <button
-                                        onMouseDown={!message.trim() ? startRecording : sendMessage}
-                                        onMouseUp={!message.trim() ? stopRecording : undefined}
-                                        onTouchStart={!message.trim() ? startRecording : undefined}
-                                        onTouchEnd={!message.trim() ? stopRecording : undefined}
-                                        className={`p-4 rounded-2xl transition-all duration-300 ${recording
-                                            ? "bg-red-600"
-                                            : message.trim()
-                                                ? "bg-gradient-to-r from-[#5D009F] to-[#8B5CF6]"
-                                                : "bg-[#5D009F]/20"
+                                        onClick={handleSend}
+                                        disabled={(!message.trim() && !selectedImage) || isSending || isSendingImage}
+                                        className={`p-4 rounded-2xl transition-all duration-300 relative overflow-hidden
+                        ${isSending || isSendingImage
+                                                ? "bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] opacity-70 cursor-not-allowed"
+                                                : message.trim() || selectedImage
+                                                    ? "bg-gradient-to-r from-[#5D009F] to-[#8B5CF6] hover:shadow-lg hover:shadow-[#5D009F]/25"
+                                                    : "bg-[#5D009F]/20"
                                             }`}
                                     >
-                                        {message.trim() ? (
+                                        {isSending || isSendingImage ? (
+                                            <div className="flex items-center justify-center">
+                                                {/* Modern Loader Animation */}
+                                                <div className="flex space-x-1">
+                                                    <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                                    <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                                    <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                                </div>
+                                            </div>
+                                        ) : message.trim() || selectedImage ? (
                                             <IoMdSend className="text-white text-xl" />
                                         ) : (
                                             <BsFillMicFill
                                                 className={`text-xl ${recording ? "text-white animate-pulse" : "text-gray-300"}`}
+                                                onMouseDown={!message.trim() ? startRecording : undefined}
+                                                onMouseUp={!message.trim() ? stopRecording : undefined}
+                                                onTouchStart={!message.trim() ? startRecording : undefined}
+                                                onTouchEnd={!message.trim() ? stopRecording : undefined}
                                             />
                                         )}
-                                    </button> */}
-                                    <button
-  onClick={handleSend}
-  disabled={sendingImage}
-  className={`p-4 rounded-2xl transition-all duration-300
-    ${sendingImage
-      ? "bg-gray-500"
-      : message.trim() || selectedImage
-      ? "bg-gradient-to-r from-[#5D009F] to-[#8B5CF6]"
-      : "bg-[#5D009F]/20"
-    }`}
->
-  {sendingImage ? (
-    <span className="animate-spin">⏳</span>
-  ) : message.trim() || selectedImage ? (
-    <IoMdSend className="text-white text-xl" />
-  ) : (
-    <BsFillMicFill className="text-gray-300 text-xl" />
-  )}
-</button>
+                                    </button>
 
-                                   <input
-  type="file"
-  accept="image/*"
-  ref={imageInputRef}
-  className="hidden"
-  onChange={(e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedImage(file); // ✅ only store
-    }
-  }}
-/>
-
-
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        ref={imageInputRef}
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                                setSelectedImage(file);
+                                            }
+                                        }}
+                                        disabled={isSending || isSendingImage}
+                                    />
                                 </div>
 
                                 {/* Quick Tips */}
