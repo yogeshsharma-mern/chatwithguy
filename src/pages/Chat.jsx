@@ -198,6 +198,39 @@ const ChatUI = () => {
         }
     }, []);
 
+useEffect(() => {
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      console.log("👀 User returned → reconnect socket");
+
+      if (!socket.connected) {
+        socket.connect();
+      }
+
+      if (myUserId) {
+        socket.emit("setup", myUserId);
+      }
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  return () =>
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+}, [myUserId]);
+useEffect(() => {
+  const handleReconnect = () => {
+    console.log("♻️ Socket reconnected:", socket.id);
+
+    if (myUserId) {
+      socket.emit("setup", myUserId);
+    }
+  };
+
+  socket.on("reconnect", handleReconnect);
+
+  return () => socket.off("reconnect", handleReconnect);
+}, [myUserId]);
 
 
     useEffect(() => {
