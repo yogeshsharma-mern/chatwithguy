@@ -1259,9 +1259,9 @@ Logout
 
                                     {/* Typing Indicator - Enhanced */}
                                     {isTyping && (
-                                        <div className="flex justify-start items-end gap-2">
+                                        <div className="flex mb-10 justify-start items-center gap-2">
                                             <div className="flex-shrink-0">
-                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5D009F] to-[#8B5CF6]"></div>
+                                                <div className="w-8 h-8  rounded-xl bg-gradient-to-br from-[#5D009F] to-[#8B5CF6]"></div>
                                             </div>
                                             <div className="bg-[#1a0033]/90 backdrop-blur-sm border border-[#5D009F]/30 rounded-2xl rounded-bl-lg px-5 py-3 shadow-black/20">
                                                 <div className="flex gap-1">
