@@ -366,19 +366,18 @@ useEffect(() => {
         socket.on("messages-seen", handleMessagesSeen);
         return () => socket.off("messages-seen", handleMessagesSeen);
     }, [activeChat, myUserId, queryClient]);
-    useEffect(() => {
-        if (!activeChat) return;
+useEffect(() => {
+  if (!activeChat?.conversationId || !socket.connected) return;
 
-        if (showChatWindow) {
-            socket.emit("join-conversation", activeChat.conversationId);
-        } else {
-            socket.emit("leave-conversation", activeChat.conversationId);
-        }
+  console.log("✅ Joining conversation:", activeChat.conversationId);
 
-        return () => {
-            socket.emit("leave-conversation", activeChat.conversationId);
-        };
-    }, [activeChat?.conversationId, showChatWindow]);
+  socket.emit("join-conversation", activeChat.conversationId);
+
+  return () => {
+    socket.emit("leave-conversation", activeChat.conversationId);
+  };
+}, [activeChat?.conversationId, socket.connected]);
+
 
 
 
@@ -1155,7 +1154,8 @@ Logout
                             </div>
 
                             {/* Messages Area - Enhanced Bubble Visibility */}
-                            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+                     <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-18">
+
                                 <div className="max-w-4xl mx-auto space-y-4">
                                     {/* Welcome Message */}
                                     <div className="text-center mb-8">
@@ -1312,7 +1312,7 @@ Logout
 
 
                             {/* Message Input */}
-                            <div className="p-4 border-t border-[#5D009F]/30 bg-gradient-to-r from-black/60 to-black/40">
+                            <div className="p-3 border-t border-[#5D009F]/30 bg-gradient-to-r from-black/60 to-black/40">
                                 <div className="flex items-center gap-3">
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-2">
