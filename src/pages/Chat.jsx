@@ -124,14 +124,25 @@ const ChatUI = () => {
 
     }, [usersData]);
 useEffect(() => {
-    checkNotificationSupport();
+    let unsubscribe;
 
-    const unsubscribe = onMessage(messaging, (payload) => {
-        toast.success(payload.notification?.body);
-    });
+    const init = async () => {
+        checkNotificationSupport();
 
-    return () => unsubscribe();
+        const messaging = await getMessagingSafe();
+
+        if (!messaging) return; // ⭐ iPhone Safari safe exit
+
+        unsubscribe = onMessage(messaging, (payload) => {
+            toast.success(payload.notification?.body);
+        });
+    };
+
+    init();
+
+    return () => unsubscribe && unsubscribe();
 }, []);
+
 useEffect(() => {
     if (!myUserId) return;
 
@@ -349,23 +360,7 @@ async function initNotifications() {
         };
     }, [myUserId]);
 
-useEffect(() => {
-    let unsubscribe;
 
-    const init = async () => {
-        const messaging = await getMessagingSafe();
-
-        if (!messaging) return; // ⭐ iPhone safe exit
-
-        unsubscribe = onMessage(messaging, (payload) => {
-            toast.success(payload.notification?.body);
-        });
-    };
-
-    init();
-
-    return () => unsubscribe && unsubscribe();
-}, []);
 
     useEffect(() => {
         const handleMessagesSeen = ({ conversationId }) => {
