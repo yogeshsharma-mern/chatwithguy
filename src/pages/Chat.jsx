@@ -1154,7 +1154,7 @@ Logout
                             </div>
 
                             {/* Messages Area - Enhanced Bubble Visibility */}
-                     <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-18">
+                     <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-16">
 
                                 <div className="max-w-4xl mx-auto space-y-4">
                                     {/* Welcome Message */}
