@@ -16,12 +16,12 @@ messaging.onBackgroundMessage(async (payload) => {
 
   console.log("📩 Background Notification:", payload);
 
-  const title = payload.data?.title || "New Message";
-  const body = payload.data?.body || "";
+  const title = payload.notification?.title || "New Message";
+  const body = payload.notification?.body || "";
 
   self.registration.showNotification(title, {
     body,
-    icon: "/logo.png",
+    icon: "/firebase-logo.png",
   });
 
 });

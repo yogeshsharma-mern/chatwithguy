@@ -15,8 +15,7 @@ import Ballpit from './Ballpit';
 import { logout } from '../redux/features/auth/authSlice';
 import { useNavigate } from 'react-router-dom';
 import {
-    BsCheck2All,
-    BsArrowLeft, BsFillMicFill
+    BsCheck2All, BsArrowLeft, BsFillMicFill
 } from 'react-icons/bs';
 import { FaRegCircle, FaCrown } from 'react-icons/fa';
 import { IoIosArrowRoundBack, IoMdSend } from 'react-icons/io';
@@ -28,6 +27,12 @@ import { apiGet } from '../api/apiFetch';
 
 import socket from '../socket';
 import { getMessagingSafe } from "../firebase";
+const rtcConfig = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" }
+  ]
+};
+
 
 import { getToken } from "firebase/messaging";
 import { onMessage } from "firebase/messaging";
@@ -41,7 +46,9 @@ const ChatUI = () => {
     console.log("uusersdata", usersData)
     const [chats, setChats] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
+    console.log("activechat",activeChat);
     const [onlineUsers, setOnlineUsers] = useState([]);
+    console.log("onlineusers",onlineUsers);
     const [token, setToken] = useState(null);
     const [isNotificationSupported, setIsNotificationSupported] = useState(true);
     const [permissionStatus, setPermissionStatus] = useState('default');
@@ -88,28 +95,52 @@ const ChatUI = () => {
 
     const [isSending, setIsSending] = useState(false);
     const [isSendingImage, setIsSendingImage] = useState(false);
+    // 🎥 WebRTC refs
+const localVideoRef = useRef(null);
+const remoteVideoRef = useRef(null);
+const peerConnectionRef = useRef(null);
+const localStreamRef = useRef(null);
 
 
+// 📞 Call state
+const [incomingCall, setIncomingCall] = useState(null);
+const [callType, setCallType] = useState(null); // "audio" | "video"
+const [callActive, setCallActive] = useState(false);
+// Add this at the top of your ChatUI component
+useEffect(() => {
+  console.log("🔍 Debug: Component mounted");
+  console.log("🔍 My User ID:", myUserId);
+  console.log("🔍 Socket connected:", socket.connected);
+  console.log("🔍 Socket ID:", socket.id);
+  
+  socket.on("connect", () => {
+    console.log("🔌 Socket connected with ID:", socket.id);
+  });
+  
+  socket.on("disconnect", () => {
+    console.log("🔌 Socket disconnected");
+  });
+}, []);
     // useEffect(() => {
     //     console.log("🔥 onlineUsers from socket:", onlineUsers);
     // }, [onlineUsers]);
 
-useEffect(() => {
-   if (typeof Notification !== "undefined") {
-      console.log("notification", Notification.permission);
-   }
-}, []);
+    useEffect(() => {
+        if (typeof Notification !== "undefined") {
+            console.log("notification", Notification.permission);
+        }
+    }, []);
     const registerDeviceMutation = useMutation({
-    mutationFn: (data) => apiPost(apiPath.registerDevice, data),
+        mutationFn: (data) => apiPost(apiPath.registerDevice, data),
 
-    onSuccess: (res) => {
-        console.log("✅ Token stored in backend");
-    },
+        onSuccess: (res) => {
+            console.log("✅ Token stored in backend");
+        },
 
-    onError: (err) => {
-        console.log("❌ Token store failed", err);
-    }
-});
+        onError: (err) => {
+            console.log("❌ Token store failed", err);
+        }
+    });
 
     useEffect(() => {
         if (!usersData) return;
@@ -126,31 +157,31 @@ useEffect(() => {
         setUserList(usersData);
 
     }, [usersData]);
-useEffect(() => {
-    let unsubscribe;
+    useEffect(() => {
+        let unsubscribe;
 
-    const init = async () => {
-        checkNotificationSupport();
+        const init = async () => {
+            checkNotificationSupport();
 
-        const messaging = await getMessagingSafe();
+            const messaging = await getMessagingSafe();
 
-        if (!messaging) return; // ⭐ iPhone Safari safe exit
+            if (!messaging) return; // ⭐ iPhone Safari safe exit
 
-        unsubscribe = onMessage(messaging, (payload) => {
-            toast.success(payload.notification?.body);
-        });
-    };
+            unsubscribe = onMessage(messaging, (payload) => {
+                toast.success(payload.notification?.body);
+            });
+        };
 
-    init();
+        init();
 
-    return () => unsubscribe && unsubscribe();
-}, []);
+        return () => unsubscribe && unsubscribe();
+ }, []);
 
-useEffect(() => {
-    if (!myUserId) return;
+    useEffect(() => {
+        if (!myUserId) return;
 
-    initNotifications();
-}, [myUserId]);
+        initNotifications();
+    }, [myUserId]);
 
     const checkNotificationSupport = () => {
         if (!("Notification" in window)) {
@@ -173,33 +204,32 @@ useEffect(() => {
         return registration;
     }
 
-async function initNotifications() {
-    try {
-        const messaging = await getMessagingSafe();
-        if (!messaging) return; // ⭐ prevents iPhone crash
+    async function initNotifications() {
+        try {
+            const messaging = await getMessagingSafe();
+            if (!messaging) return; // ⭐ prevents iPhone crash
 
-        if (!("Notification" in window)) return;
+            if (!("Notification" in window)) return;
 
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") return;
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") return;
 
-        const registration = await registerServiceWorker();
-        if (!registration) return;
+            const registration = await registerServiceWorker();
+            if (!registration) return;
 
-        const fcmToken = await getToken(messaging, {
-            vapidKey: "BAs3TzpCXRzxtrcf-8kaYgfCXojcgruMUrXuU2s2GrbG7VDKea3Oaa22WRi3MjJ8WQcGABn6jARBxiEyaNXrJcE",
-            serviceWorkerRegistration: registration,
-        });
-console.log("fcmatoken",fcmToken);
-        registerDeviceMutation.mutate({
-            fcmToken,
-            userId: myUserId
-        });
-
-    } catch (err) {
-        console.error(err);
+            const fcmToken = await getToken(messaging, {
+                vapidKey: "BAs3TzpCXRzxtrcf-8kaYgfCXojcgruMUrXuU2s2GrbG7VDKea3Oaa22WRi3MjJ8WQcGABn6jARBxiEyaNXrJcE",
+                serviceWorkerRegistration: registration,
+            });
+            console.log("fcmatoken", fcmToken);
+            registerDeviceMutation.mutate({
+                fcmToken,
+                userId: myUserId
+            });
+        } catch (err) {
+            console.error(err);
+        }
     }
-}
 
     console.log("usersdata", usersData);
     console.log("userlist", userList);
@@ -264,6 +294,13 @@ console.log("fcmatoken",fcmToken);
         return () => socket.off("reconnect", handleReconnect);
     }, [myUserId]);
 
+useEffect(()=>
+{
+if (!onlineUsers.includes(activeChat?._id)) {
+  toast.error("User is offline");
+  return;
+}
+},[activeChat])
 
     useEffect(() => {
         if (showChatWindow && isMobileView && inputRef.current) {
@@ -548,7 +585,430 @@ console.log("fcmatoken",fcmToken);
             timeout = setTimeout(later, wait);
         };
     };
+useEffect(() => {
+  console.log("🔄 Setting up call event listeners");
+  
+  socket.on("incoming-call", ({ from, offer, callType }) => {
+    console.log("📞 INCOMING CALL RECEIVED!");
+    console.log("📞 From:", from);
+    console.log("📞 Call type:", callType);
+    console.log("📞 Current user:", myUserId);
+    console.log("📞 Active chat:", activeChat?._id);
+    console.log("📞 Offer:", offer);
+    
+    setIncomingCall({ from, offer });
+    setCallType(callType);
+    toast.info(`Incoming ${callType} call...`);
+  });
 
+  socket.on("call-answered", async ({ answer }) => {
+    console.log("✅ Call answered received!");
+    console.log("✅ Answer:", answer);
+    
+    try {
+      await peerConnectionRef.current.setRemoteDescription(
+        new RTCSessionDescription(answer)
+      );
+      console.log("✅ Remote description set");
+    } catch (err) {
+      console.error("❌ Error setting remote description:", err);
+    }
+  });
+
+  socket.on("ice-candidate", async ({ candidate }) => {
+    console.log("❄️ ICE candidate received");
+    if (candidate && peerConnectionRef.current) {
+      try {
+        await peerConnectionRef.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+        console.log("✅ ICE candidate added");
+      } catch (err) {
+        console.error("❌ Error adding ICE candidate:", err);
+      }
+    }
+  });
+
+  socket.on("end-call", () => {
+    console.log("📞 Call ended by other user");
+    endCall();
+    toast.info("Call ended");
+  });
+
+  return () => {
+    console.log("🔄 Cleaning up call event listeners");
+    socket.off("incoming-call");
+    socket.off("call-answered");
+    socket.off("ice-candidate");
+    socket.off("end-call");
+  };
+}, []);
+// Add this near the top of your ChatUI component, after all useEffects
+useEffect(() => {
+  console.log("🎧 DEBUG: Setting up universal event listener");
+  
+  // This will log EVERY event received
+  socket.onAny((eventName, ...args) => {
+    console.log(`📡 [RECEIVER] RAW EVENT: "${eventName}"`, args);
+  });
+
+  // Specifically check for incoming-call
+  socket.on("incoming-call", (data) => {
+    console.log("🔔🔔🔔 [RECEIVER] INCOMING CALL DETECTED! 🔔🔔🔔");
+    console.log("📞 Full data:", data);
+    console.log("📞 From:", data.from);
+    console.log("📞 Call type:", data.callType);
+    console.log("📞 Current user ID:", myUserId);
+    
+    setIncomingCall({ from: data.from, offer: data.offer });
+    setCallType(data.callType);
+  });
+
+  return () => {
+    socket.offAny();
+    socket.off("incoming-call");
+  };
+}, []);
+// Add this to your receiver's ChatUI component
+useEffect(() => {
+  console.log("🎧 Setting up call listeners on receiver");
+  
+  // Test if socket is working
+  socket.on("connect", () => {
+    console.log("✅ Receiver socket connected:", socket.id);
+  });
+
+  socket.on("incoming-call", (data) => {
+    console.log("🔔🔔🔔 INCOMING CALL DETECTED! 🔔🔔🔔");
+    console.log("📞 Data:", data);
+    console.log("📞 From:", data.from);
+    console.log("📞 Call type:", data.callType);
+    console.log("📞 Current user:", myUserId);
+  });
+
+  // Also listen for any event to test
+  socket.onAny((event, ...args) => {
+    console.log("📡 Receiver received event:", event, args);
+  });
+
+  return () => {
+    socket.offAny();
+    socket.off("incoming-call");
+  };
+}, []);
+const checkMediaDevices = async () => {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const audioDevices = devices.filter(d => d.kind === 'audioinput');
+    
+    console.log("📷 Video devices:", videoDevices.length);
+    console.log("🎤 Audio devices:", audioDevices.length);
+    
+    if (videoDevices.length === 0 && callType === 'video') {
+      toast.error("No camera found on this device");
+      return false;
+    }
+    
+    return true;
+  } catch (err) {
+    console.error("Error checking media devices:", err);
+    return false;
+  }
+};
+// const startCall = async (type) => {
+//   try {
+// // In your startCall function, add these lines before emitting
+// console.log("🔍 DEBUG - Before emitting call-user:");
+// console.log("🔍 Socket ID:", socket.id);
+// console.log("🔍 Socket connected:", socket.connected);
+// console.log("🔍 Target user ID:", activeChat._id);
+// console.log("🔍 Is target online:", onlineUsers.includes(activeChat._id));
+// console.log("🔍 All online users:", onlineUsers);
+
+// // Check if the target user exists in the online users list
+// if (!onlineUsers.includes(activeChat._id)) {
+//   console.error("❌ TARGET USER NOT IN ONLINE LIST!");
+//   toast.error("User is offline");
+//   return;
+// }
+
+//     // Check socket connection
+//     if (!socket.connected) {
+//       console.log("❌ Socket not connected, attempting to reconnect...");
+//       socket.connect();
+//       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for connection
+//     }
+
+//     setCallType(type);
+    
+//     // Get user media
+//     console.log("🎥 Requesting media permissions...");
+//     const stream = await navigator.mediaDevices.getUserMedia({
+//       audio: true,
+//       video: type === "video",
+//     });
+//     console.log("✅ Media permissions granted");
+
+//     localStreamRef.current = stream;
+    
+//     if (localVideoRef.current) {
+//       localVideoRef.current.srcObject = stream;
+//     }
+
+//     // Create peer connection
+//     peerConnectionRef.current = new RTCPeerConnection(rtcConfig);
+//     console.log("✅ Peer connection created");
+
+//     // Add tracks
+//     stream.getTracks().forEach(track => {
+//       peerConnectionRef.current.addTrack(track, stream);
+//       console.log("🎵 Added track:", track.kind);
+//     });
+
+//     // Handle incoming tracks
+//     peerConnectionRef.current.ontrack = (event) => {
+//       console.log("📡 Received remote track");
+//       if (remoteVideoRef.current) {
+//         remoteVideoRef.current.srcObject = event.streams[0];
+//       }
+//     };
+
+//     // Handle ICE candidates
+//     peerConnectionRef.current.onicecandidate = (event) => {
+//       if (event.candidate) {
+//         console.log("❄️ Sending ICE candidate");
+//         socket.emit("ice-candidate", {
+//           to: activeChat._id,
+//           candidate: event.candidate,
+//         });
+//       }
+//     };
+
+//     // Create offer
+//     console.log("📝 Creating offer...");
+//     const offer = await peerConnectionRef.current.createOffer();
+//     await peerConnectionRef.current.setLocalDescription(offer);
+//     console.log("✅ Offer created:", offer);
+
+//     // Emit call to target user
+//     console.log("📤 Emitting call-user event to:", activeChat._id);
+//     socket.emit("call-user", {
+//       to: activeChat._id,
+//       offer,
+//       callType: type,
+//     });
+
+//     // Add acknowledgment
+//     socket.once(`call-sent-${activeChat._id}`, (data) => {
+//       console.log("📬 Call sent acknowledgment:", data);
+//     });
+
+//     setCallActive(true);
+//     toast.success(`Calling ${activeChat.fullName}...`);
+    
+//   } catch (err) {
+//     console.error("❌ Error starting call:", err);
+//     toast.error("Failed to start call. Check camera/mic permissions.");
+//   }
+// };
+const startCall = async (type) => {
+  try {
+    console.log("📞 Starting call of type:", type);
+    setCallType(type);
+    
+    // Get user media with both audio and video if type is video
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: type === "video",
+    });
+
+    localStreamRef.current = stream;
+    
+    // Show local video immediately
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      console.log("✅ Local video displayed");
+    }
+
+    // Create peer connection with proper configuration
+    peerConnectionRef.current = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        // Add TURN servers for production (optional but recommended)
+      ]
+    });
+
+    // Add all tracks to peer connection
+    stream.getTracks().forEach(track => {
+      peerConnectionRef.current.addTrack(track, stream);
+      console.log(`🎵 Added ${track.kind} track to peer connection`);
+    });
+
+    // Handle incoming tracks
+    peerConnectionRef.current.ontrack = (event) => {
+      console.log("📡 Received remote track:", event.track.kind);
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+        console.log("✅ Remote video displayed");
+      }
+    };
+
+    // Handle ICE candidates
+    peerConnectionRef.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log("❄️ Sending ICE candidate");
+        socket.emit("ice-candidate", {
+          to: activeChat._id,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    // Log connection state changes
+    peerConnectionRef.current.onconnectionstatechange = () => {
+      console.log("🔌 Connection state:", peerConnectionRef.current.connectionState);
+    };
+
+    // Create and send offer
+    console.log("📝 Creating offer...");
+    const offer = await peerConnectionRef.current.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: type === "video",
+    });
+    
+    await peerConnectionRef.current.setLocalDescription(offer);
+    console.log("✅ Offer created:", offer);
+
+    // Emit call to target user
+    socket.emit("call-user", {
+      to: activeChat._id,
+      offer,
+      callType: type,
+    });
+
+    setCallActive(true);
+    toast.success(`Calling ${activeChat.fullName}...`);
+    
+  } catch (err) {
+    console.error("❌ Error starting call:", err);
+    toast.error("Failed to start call. Check camera/mic permissions.");
+  }
+};
+const acceptCall = async () => {
+  try {
+    if (!incomingCall) return;
+
+    console.log("📞 Accepting call from:", incomingCall.from);
+    
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: callType === "video",
+    });
+
+    localStreamRef.current = stream;
+    
+    // Show local video
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      console.log("✅ Local video displayed");
+    }
+
+    // Create peer connection
+    peerConnectionRef.current = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ]
+    });
+
+    // Add all tracks
+    stream.getTracks().forEach(track => {
+      peerConnectionRef.current.addTrack(track, stream);
+      console.log(`🎵 Added ${track.kind} track`);
+    });
+
+    // Handle incoming tracks
+    peerConnectionRef.current.ontrack = (event) => {
+      console.log("📡 Received remote track:", event.track.kind);
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+        console.log("✅ Remote video displayed");
+      }
+    };
+
+    // Handle ICE candidates
+    peerConnectionRef.current.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log("❄️ Sending ICE candidate");
+        socket.emit("ice-candidate", {
+          to: incomingCall.from,
+          candidate: event.candidate,
+        });
+      }
+    };
+
+    // Log connection state
+    peerConnectionRef.current.onconnectionstatechange = () => {
+      console.log("🔌 Connection state:", peerConnectionRef.current.connectionState);
+    };
+
+    // Set remote description and create answer
+    console.log("📝 Setting remote description...");
+    await peerConnectionRef.current.setRemoteDescription(
+      new RTCSessionDescription(incomingCall.offer)
+    );
+    
+    console.log("📝 Creating answer...");
+    const answer = await peerConnectionRef.current.createAnswer();
+    await peerConnectionRef.current.setLocalDescription(answer);
+
+    // Send answer
+    socket.emit("answer-call", {
+      to: incomingCall.from,
+      answer,
+    });
+
+    setIncomingCall(null);
+    setCallActive(true);
+    
+  } catch (err) {
+    console.error("❌ Error accepting call:", err);
+    toast.error("Failed to accept call");
+  }
+};
+const endCall = () => {
+  // Stop all tracks
+  if (localStreamRef.current) {
+    localStreamRef.current.getTracks().forEach(track => track.stop());
+    localStreamRef.current = null;
+  }
+
+  // Close peer connection
+  if (peerConnectionRef.current) {
+    peerConnectionRef.current.close();
+    peerConnectionRef.current = null;
+  }
+
+  // Clear video elements
+  if (localVideoRef.current) {
+    localVideoRef.current.srcObject = null;
+  }
+  if (remoteVideoRef.current) {
+    remoteVideoRef.current.srcObject = null;
+  }
+
+  // Notify other user
+  if (activeChat && callActive) {
+    socket.emit("end-call", { to: activeChat._id });
+  }
+
+  setCallActive(false);
+  setIncomingCall(null);
+  setCallType(null);
+};
 
     const sendMessageMutation = useMutation({
         mutationFn: (payload) =>
@@ -669,63 +1129,63 @@ console.log("fcmatoken",fcmToken);
         );
     };
 
-const startRecording = async () => {
-    try {
-        // ✅ SAFETY CHECKS FOR IPHONE
-        if (typeof window === "undefined") return;
-        if (!("mediaDevices" in navigator)) return;
-        if (!window.MediaRecorder) {
-            alert("Voice recording not supported on this device");
-            return;
+    const startRecording = async () => {
+        try {
+            // ✅ SAFETY CHECKS FOR IPHONE
+            if (typeof window === "undefined") return;
+            if (!("mediaDevices" in navigator)) return;
+            if (!window.MediaRecorder) {
+                alert("Voice recording not supported on this device");
+                return;
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            const mediaRecorder = new MediaRecorder(stream);
+
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            setRecording(true);
+            setShowRecordingBubble(true);
+            setRecordingTime(0);
+
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+
+            mediaRecorder.ondataavailable = (e) => {
+                audioChunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                clearInterval(recordingTimerRef.current);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+
+        } catch (err) {
+            console.error("Mic error:", err);
         }
-
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        const mediaRecorder = new MediaRecorder(stream);
-
-        mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
-
-        setRecording(true);
-        setShowRecordingBubble(true);
-        setRecordingTime(0);
-
-        recordingTimerRef.current = setInterval(() => {
-            setRecordingTime(prev => prev + 1);
-        }, 1000);
-
-        mediaRecorder.ondataavailable = (e) => {
-            audioChunksRef.current.push(e.data);
-        };
-
-        mediaRecorder.onstop = () => {
-            clearInterval(recordingTimerRef.current);
-            stream.getTracks().forEach(track => track.stop());
-        };
-
-        mediaRecorder.start();
-
-    } catch (err) {
-        console.error("Mic error:", err);
-    }
-};
-
-
-const stopRecording = () => {
-    if (!mediaRecorderRef.current) return;
-    if (!window.MediaRecorder) return;   // ✅ safety
-
-    mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, {
-            type: "audio/webm",
-        });
-
-        setRecordedBlob(blob);
     };
 
-    mediaRecorderRef.current.stop();
-    setRecording(false);
-};
+
+    const stopRecording = () => {
+        if (!mediaRecorderRef.current) return;
+        if (!window.MediaRecorder) return;   // ✅ safety
+
+        mediaRecorderRef.current.onstop = () => {
+            const blob = new Blob(audioChunksRef.current, {
+                type: "audio/webm",
+            });
+
+            setRecordedBlob(blob);
+        };
+
+        mediaRecorderRef.current.stop();
+        setRecording(false);
+    };
 
     const handleRemoveImage = () => {
         setSelectedImage(null);
@@ -1179,10 +1639,10 @@ Logout
 
                                     {/* Right: Action Buttons */}
                                     <div className="flex items-center gap-2">
-                                        <button className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all group">
+                                        <button onClick={() => startCall("audio")} className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all group">
                                             <FiPhone className="text-xl text-gray-300 group-hover:text-white transition-colors" />
                                         </button>
-                                        <button className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all group">
+                                        <button onClick={() => startCall("video")} className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all group">
                                             <FiVideo className="text-xl text-gray-300 group-hover:text-white transition-colors" />
                                         </button>
                                         <button className="p-3 rounded-xl bg-[#5D009F]/20 hover:bg-[#8B5CF6]/30 border border-[#8B5CF6]/20 transition-all group">
@@ -1481,6 +1941,79 @@ Logout
                         </div>
                     </div>
                 )}
+{callActive && (
+  <div className="fixed inset-0 bg-black z-50 flex flex-col">
+    {/* Remote Video (full screen) */}
+    <video
+      ref={remoteVideoRef}
+      autoPlay
+      playsInline
+      className="w-full h-full object-cover"
+    />
+    
+    {/* Local Video (picture-in-picture) */}
+    {callType === "video" && (
+      <video
+        ref={localVideoRef}
+        autoPlay
+        playsInline
+        muted  // Important: mute local video to prevent echo
+        className="w-48 h-48 absolute bottom-20 right-4 rounded-lg border-4 border-white shadow-2xl object-cover"
+      />
+    )}
+    
+    {/* Call controls */}
+    <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex gap-4">
+      <button
+        onClick={() => {
+          socket.emit("end-call", { to: activeChat._id });
+          endCall();
+        }}
+        className="bg-red-600 hover:bg-red-700 px-8 py-3 rounded-full text-white font-semibold shadow-lg transition-all"
+      >
+        End Call
+      </button>
+    </div>
+  </div>
+)}
+
+{incomingCall && (
+  <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center">
+    <div className="bg-gradient-to-b from-[#1a0033] to-black p-8 rounded-2xl text-center max-w-sm w-full mx-4 border border-[#5D009F]/30">
+      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#5D009F] to-[#8B5CF6] mx-auto mb-4 flex items-center justify-center">
+        {callType === "video" ? (
+          <FiVideo className="text-4xl text-white" />
+        ) : (
+          <FiPhone className="text-4xl text-white" />
+        )}
+      </div>
+      <h2 className="text-2xl font-bold text-white mb-2">
+        Incoming {callType} call
+      </h2>
+      <p className="text-gray-400 mb-6">
+        from {activeChat?.fullName || "Unknown"}
+      </p>
+      <div className="flex gap-4 justify-center">
+        <button
+          onClick={acceptCall}
+          className="bg-green-600 hover:bg-green-700 px-6 py-3 text-white rounded-xl font-semibold transition-all"
+        >
+          Accept
+        </button>
+        <button
+          onClick={() => {
+            socket.emit("end-call", { to: incomingCall.from });
+            setIncomingCall(null);
+          }}
+          className="bg-red-600 hover:bg-red-700 px-6 py-3 text-white rounded-xl font-semibold transition-all"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
                 {/* Mobile Empty State */}
                 {isMobileView && !showChatList && !showChatWindow && (
